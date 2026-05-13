@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/listing_provider.dart';
+import '../providers/user_provider.dart';
 import '../theme/app_theme.dart';
 import '../models/listing.dart';
 
@@ -10,11 +11,13 @@ class WebAdminDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final listings = context.watch<ListingProvider>();
+    final userProv = context.watch<UserProvider>();
     final all = listings.allListings;
     final pending = all.where((l) => l.status == ListingStatus.pending).length;
     final active = all.where((l) => l.status == ListingStatus.active).length;
     final sold = all.where((l) => l.status == ListingStatus.sold).length;
     final featured = all.where((l) => l.isFeatured).length;
+    final totalUsers = userProv.users.length;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -54,7 +57,15 @@ class WebAdminDashboard extends StatelessWidget {
                 value: '$sold',
                 icon: Icons.check_circle_outline,
                 color: AppColors.success,
-                sub: 'Bu ay',
+                sub: 'Tamamlanan işlem',
+              ),
+              const SizedBox(width: 16),
+              _StatCard(
+                label: 'Kullanıcılar',
+                value: '$totalUsers',
+                icon: Icons.people,
+                color: Colors.teal,
+                sub: 'Kayıtlı üye',
               ),
             ],
           ),

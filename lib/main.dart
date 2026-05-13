@@ -6,14 +6,21 @@ import 'providers/auth_provider.dart';
 import 'screens/categories_screen.dart';
 import 'screens/pending_listings_screen.dart';
 import 'screens/send_notification_screen.dart';
+import 'providers/listing_provider.dart';
+import 'providers/user_provider.dart';
+import 'screens/web_admin_shell.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ListingProvider()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+      ],
       child: const AdminApp(),
     ),
   );
