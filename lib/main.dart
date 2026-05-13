@@ -3,17 +3,32 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
+<<<<<<< HEAD
 import 'screens/categories_screen.dart';
 import 'screens/pending_listings_screen.dart';
 import 'screens/send_notification_screen.dart';
+=======
+import 'providers/listing_provider.dart';
+import 'providers/user_provider.dart';
+import 'screens/web_admin_shell.dart';
+>>>>>>> 7b97060c3409da2879e2ff64ffcd873a089b502d
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(
+<<<<<<< HEAD
     ChangeNotifierProvider(
       create: (_) => AuthProvider(),
+=======
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ListingProvider()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+      ],
+>>>>>>> 7b97060c3409da2879e2ff64ffcd873a089b502d
       child: const AdminApp(),
     ),
   );

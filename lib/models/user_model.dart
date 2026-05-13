@@ -8,6 +8,7 @@ class UserModel {
   final int listingCount;
   final String? photoUrl;
   final String? bio;
+  final bool isBanned;
 
   const UserModel({
     required this.uid,
@@ -19,6 +20,7 @@ class UserModel {
     this.listingCount = 0,
     this.photoUrl,
     this.bio,
+    this.isBanned = false,
   });
 
   factory UserModel.fromMap(String uid, Map<String, dynamic> map) {
@@ -32,6 +34,7 @@ class UserModel {
       listingCount: map['listingCount'] as int? ?? 0,
       photoUrl: map['photoUrl'] as String?,
       bio: map['bio'] as String?,
+      isBanned: map['isBanned'] as bool? ?? false,
     );
   }
 
@@ -41,6 +44,7 @@ class UserModel {
         'displayName': displayName,
         'phone': phone,
         'isAdmin': isAdmin,
+        'isBanned': isBanned,
         'createdAt': createdAt.toIso8601String(),
         'listingCount': listingCount,
         if (photoUrl != null) 'photoUrl': photoUrl,
