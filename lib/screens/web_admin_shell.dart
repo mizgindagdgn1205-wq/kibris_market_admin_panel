@@ -1,17 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
-import '../providers/listing_provider.dart';
-import '../models/listing.dart';
 import '../theme/app_theme.dart';
-import 'web_admin_categories.dart';
 import 'web_admin_dashboard.dart';
 import 'web_admin_listings.dart';
 import 'web_admin_messages.dart';
-import 'web_admin_reports.dart';
 import 'web_admin_users.dart';
 
-enum AdminSection { dashboard, pendingListings, allListings, users, messages, reports, categories }
+enum AdminSection { dashboard, pendingListings, allListings, users, messages, reports }
 
 class WebAdminShell extends StatefulWidget {
   const WebAdminShell({super.key});
@@ -30,7 +26,6 @@ class _WebAdminShellState extends State<WebAdminShell> {
     _NavItem(AdminSection.users,           Icons.people_outline,            Icons.people,             'Kullanıcılar'),
     _NavItem(AdminSection.messages,        Icons.chat_bubble_outline,       Icons.chat_bubble,        'Mesajlar'),
     _NavItem(AdminSection.reports,         Icons.bar_chart_outlined,        Icons.bar_chart,          'Raporlar'),
-    _NavItem(AdminSection.categories,      Icons.category_outlined,          Icons.category,           'Kategoriler'),
   ];
 
   @override
@@ -71,8 +66,7 @@ class _WebAdminShellState extends State<WebAdminShell> {
       AdminSection.allListings     => const WebAdminListings(onlyPending: false),
       AdminSection.users           => const WebAdminUsers(),
       AdminSection.messages        => const WebAdminMessages(),
-      AdminSection.reports         => const WebAdminReports(),
-      AdminSection.categories      => const WebAdminCategories(),
+      AdminSection.reports         => const WebAdminDashboard(),
     };
   }
 }
@@ -126,8 +120,8 @@ class _AdminSidebar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               children: _navItems.map((item) {
                 final isSelected = selected == item.section;
-                return _pending(context, item) > 0 && !isSelected
-                    ? _buildBadgeItem(context, item, isSelected)
+                return _pending(item) > 0 && !isSelected
+                    ? _buildBadgeItem(item, isSelected)
                     : _buildItem(item, isSelected);
               }).toList(),
             ),
@@ -153,17 +147,8 @@ class _AdminSidebar extends StatelessWidget {
     );
   }
 
-  int _pending(BuildContext context, _NavItem item) {
-    if (item.section != AdminSection.pendingListings) return 0;
-    try {
-      final prov = Provider.of<ListingProvider>(context, listen: false);
-      return prov.allListings
-          .where((l) => l.status == ListingStatus.pending)
-          .length;
-    } catch (_) {
-      return 0;
-    }
-  }
+  int _pending(_NavItem item) =>
+      item.section == AdminSection.pendingListings ? 7 : 0;
 
   Widget _buildItem(_NavItem item, bool isSelected) {
     return Container(
@@ -189,8 +174,8 @@ class _AdminSidebar extends StatelessWidget {
     );
   }
 
-  Widget _buildBadgeItem(BuildContext context, _NavItem item, bool isSelected) {
-    final count = _pending(context, item);
+  Widget _buildBadgeItem(_NavItem item, bool isSelected) {
+    final count = _pending(item);
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
       child: ListTile(
@@ -228,7 +213,6 @@ class _AdminTopBar extends StatelessWidget {
     AdminSection.users:           'Kullanıcı Yönetimi',
     AdminSection.messages:        'Mesajlar',
     AdminSection.reports:         'Raporlar',
-    AdminSection.categories:      'Kategori Yönetimi',
   };
 
   @override

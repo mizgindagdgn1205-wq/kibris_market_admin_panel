@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 enum ListingStatus { active, pending, sold, expired }
 enum ListingType { sell, rent, wanted }
 
@@ -29,7 +27,7 @@ class Listing {
     required this.title,
     required this.description,
     required this.price,
-    this.currency = '£',
+    this.currency = '₺',
     required this.categoryId,
     required this.subcategoryId,
     required this.location,
@@ -45,65 +43,6 @@ class Listing {
     this.sellerName,
     this.sellerPhotoUrl,
   });
-
-  factory Listing.fromFirestore(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>;
-    return Listing(
-      id:            doc.id,
-      title:         d['title'] as String? ?? '',
-      description:   d['description'] as String? ?? '',
-      price:         (d['price'] as num?)?.toDouble() ?? 0,
-      currency:      d['currency'] as String? ?? '£',
-      categoryId:    d['categoryId'] as String? ?? '',
-      subcategoryId: d['subcategoryId'] as String? ?? '',
-      location:      d['location'] as String? ?? '',
-      district:      d['district'] as String? ?? '',
-      imageUrls:     List<String>.from(d['imageUrls'] ?? []),
-      createdAt:     (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      status:        _parseStatus(d['status']),
-      type:          _parseType(d['type']),
-      attributes:    Map<String, String>.from(
-                       (d['attributes'] as Map?)?.map((k, v) => MapEntry(k.toString(), v.toString())) ?? {}),
-      isFeatured:    d['isFeatured'] as bool? ?? false,
-      viewCount:     d['viewCount'] as int? ?? 0,
-      sellerId:      d['sellerId'] as String? ?? '',
-      sellerName:    d['sellerName'] as String?,
-      sellerPhotoUrl: d['sellerPhotoUrl'] as String?,
-    );
-  }
-
-  static ListingStatus _parseStatus(dynamic v) => switch (v) {
-    'active'  => ListingStatus.active,
-    'pending' => ListingStatus.pending,
-    'sold'    => ListingStatus.sold,
-    'expired' => ListingStatus.expired,
-    _         => ListingStatus.pending,
-  };
-
-  static ListingType _parseType(dynamic v) => switch (v) {
-    'sell'   => ListingType.sell,
-    'rent'   => ListingType.rent,
-    'wanted' => ListingType.wanted,
-    _        => ListingType.sell,
-  };
-
-  Listing copyWith({
-    ListingStatus? status,
-    bool? isFeatured,
-  }) {
-    return Listing(
-      id: id, title: title, description: description,
-      price: price, currency: currency,
-      categoryId: categoryId, subcategoryId: subcategoryId,
-      location: location, district: district,
-      imageUrls: imageUrls, createdAt: createdAt,
-      status: status ?? this.status,
-      type: type, attributes: attributes,
-      isFeatured: isFeatured ?? this.isFeatured,
-      viewCount: viewCount, sellerId: sellerId,
-      sellerName: sellerName, sellerPhotoUrl: sellerPhotoUrl,
-    );
-  }
 
   String get formattedPrice {
     if (price == 0) return 'Ücretsiz';
