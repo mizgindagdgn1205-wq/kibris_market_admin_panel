@@ -99,7 +99,7 @@ class _WebAdminUsersState extends State<WebAdminUsers> {
                       )
                     : ListView.separated(
                         itemCount: filtered.length,
-                        separatorBuilder: (_, _) =>
+                        separatorBuilder: (_, __) =>
                             const Divider(height: 1, color: AppColors.divider),
                         itemBuilder: (_, i) {
                           final u = filtered[i];
