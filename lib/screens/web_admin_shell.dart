@@ -11,11 +11,10 @@ import 'web_admin_messages.dart';
 import 'web_admin_reports.dart';
 import 'web_admin_users.dart';
 
-enum AdminSection { dashboard, pendingListings, allListings, users, messages, reports, categories }
+enum AdminSection { dashboard, pending, listings, users, messages, reports, categories }
 
 class WebAdminShell extends StatefulWidget {
   const WebAdminShell({super.key});
-
   @override
   State<WebAdminShell> createState() => _WebAdminShellState();
 }
@@ -23,39 +22,28 @@ class WebAdminShell extends StatefulWidget {
 class _WebAdminShellState extends State<WebAdminShell> {
   AdminSection _section = AdminSection.dashboard;
 
-  static const _navItems = [
-    _NavItem(AdminSection.dashboard,       Icons.dashboard_outlined,       Icons.dashboard,          'Dashboard'),
-    _NavItem(AdminSection.pendingListings, Icons.pending_actions_outlined,  Icons.pending_actions,    'Onay Bekleyen'),
-    _NavItem(AdminSection.allListings,     Icons.list_alt_outlined,         Icons.list_alt,           'Tüm İlanlar'),
-    _NavItem(AdminSection.users,           Icons.people_outline,            Icons.people,             'Kullanıcılar'),
-    _NavItem(AdminSection.messages,        Icons.chat_bubble_outline,       Icons.chat_bubble,        'Mesajlar'),
-    _NavItem(AdminSection.reports,         Icons.bar_chart_outlined,        Icons.bar_chart,          'Raporlar'),
-    _NavItem(AdminSection.categories,      Icons.category_outlined,          Icons.category,           'Kategoriler'),
+  static const _nav = [
+    _NavItem(AdminSection.dashboard,  Icons.grid_view_rounded,    'Dashboard'),
+    _NavItem(AdminSection.pending,    Icons.access_time_rounded,  'Onay Bekleyen'),
+    _NavItem(AdminSection.listings,   Icons.list_alt_rounded,     'Tüm İlanlar'),
+    _NavItem(AdminSection.users,      Icons.people_outline,       'Kullanıcılar'),
+    _NavItem(AdminSection.messages,   Icons.chat_bubble_outline,  'Mesajlar'),
+    _NavItem(AdminSection.reports,    Icons.bar_chart_rounded,    'Raporlar'),
+    _NavItem(AdminSection.categories, Icons.category_outlined,    'Kategoriler'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-
-    if (!auth.isAdmin) {
-      return const Scaffold(
-        body: Center(child: Text('Erişim Yetkisi Yok', style: TextStyle(fontSize: 18))),
-      );
-    }
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.background,
       body: Row(
         children: [
-          _AdminSidebar(
-            selected: _section,
-            onSelect: (s) => setState(() => _section = s),
-          ),
+          _Sidebar(section: _section, nav: _nav, onSelect: (s) => setState(() => _section = s)),
           Expanded(
             child: Column(
               children: [
-                _AdminTopBar(section: _section),
-                Expanded(child: _buildContent()),
+                _TopBar(title: _nav.firstWhere((n) => n.section == _section).label),
+                Expanded(child: _body()),
               ],
             ),
           ),
@@ -64,178 +52,168 @@ class _WebAdminShellState extends State<WebAdminShell> {
     );
   }
 
-  Widget _buildContent() {
-    return switch (_section) {
-      AdminSection.dashboard       => const WebAdminDashboard(),
-      AdminSection.pendingListings => const WebAdminListings(onlyPending: true),
-      AdminSection.allListings     => const WebAdminListings(onlyPending: false),
-      AdminSection.users           => const WebAdminUsers(),
-      AdminSection.messages        => const WebAdminMessages(),
-      AdminSection.reports         => const WebAdminReports(),
-      AdminSection.categories      => const WebAdminCategories(),
-    };
-  }
+  Widget _body() => switch (_section) {
+        AdminSection.dashboard  => const WebAdminDashboard(),
+        AdminSection.pending    => const WebAdminListings(onlyPending: true),
+        AdminSection.listings   => const WebAdminListings(onlyPending: false),
+        AdminSection.users      => const WebAdminUsers(),
+        AdminSection.messages   => const WebAdminMessages(),
+        AdminSection.reports    => const WebAdminReports(),
+        AdminSection.categories => const WebAdminCategories(),
+      };
 }
 
-// ─── Sidebar ─────────────────────────────────────────────────────────────────
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 
-class _AdminSidebar extends StatelessWidget {
-  final AdminSection selected;
+class _Sidebar extends StatelessWidget {
+  final AdminSection section;
+  final List<_NavItem> nav;
   final void Function(AdminSection) onSelect;
-
-  const _AdminSidebar({required this.selected, required this.onSelect});
-
-  static const _navItems = _WebAdminShellState._navItems;
+  const _Sidebar({required this.section, required this.nav, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
     return Container(
       width: 220,
-      color: const Color(0xFF1A2035),
+      color: AppColors.sidebar,
       child: Column(
         children: [
           // Logo
           Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
             alignment: Alignment.centerLeft,
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFF2A3050))),
-            ),
             child: Row(
               children: [
                 Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.admin_panel_settings, color: Colors.white, size: 18),
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(7)),
+                  child: const Icon(Icons.storefront, color: Colors.white, size: 16),
                 ),
                 const SizedBox(width: 10),
-                const Text('Admin Panel',
-                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                const Text('Kıbrıs Market', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
               ],
             ),
           ),
+          const Divider(color: Color(0xFF1E293B), height: 1),
           const SizedBox(height: 8),
           // Nav items
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              children: _navItems.map((item) {
-                final isSelected = selected == item.section;
-                return _pending(context, item) > 0 && !isSelected
-                    ? _buildBadgeItem(context, item, isSelected)
-                    : _buildItem(item, isSelected);
-              }).toList(),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              children: nav.map((item) => _NavTile(item: item, selected: section == item.section, onTap: () => onSelect(item.section))).toList(),
             ),
           ),
-          // Bottom: site'ye dön
-          const Divider(color: Color(0xFF2A3050), height: 1),
-          InkWell(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: const Row(
-                children: [
-                  Icon(Icons.arrow_back, color: Color(0xFF8899AA), size: 18),
-                  SizedBox(width: 10),
-                  Text('Siteye Dön', style: TextStyle(color: Color(0xFF8899AA), fontSize: 13)),
-                ],
-              ),
+          const Divider(color: Color(0xFF1E293B), height: 1),
+          // User + logout
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: AppColors.primary,
+                  child: Text(
+                    auth.displayName.isNotEmpty ? auth.displayName[0].toUpperCase() : 'A',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(auth.displayName.isEmpty ? 'Admin' : auth.displayName,
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                      const Text('Yönetici', style: TextStyle(color: Color(0xFF64748B), fontSize: 11)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout, color: Color(0xFF64748B), size: 18),
+                  tooltip: 'Çıkış',
+                  onPressed: () => auth.signOut(),
+                  constraints: const BoxConstraints(),
+                  padding: EdgeInsets.zero,
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
         ],
-      ),
-    );
-  }
-
-  int _pending(BuildContext context, _NavItem item) {
-    if (item.section != AdminSection.pendingListings) return 0;
-    try {
-      final prov = Provider.of<ListingProvider>(context, listen: false);
-      return prov.allListings
-          .where((l) => l.status == ListingStatus.pending)
-          .length;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  Widget _buildItem(_NavItem item, bool isSelected) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      decoration: BoxDecoration(
-        color: isSelected ? AppColors.primary.withValues(alpha: 0.3) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        border: isSelected ? Border.all(color: AppColors.primary.withValues(alpha: 0.5)) : null,
-      ),
-      child: ListTile(
-        dense: true,
-        leading: Icon(isSelected ? item.activeIcon : item.icon,
-            color: isSelected ? Colors.white : const Color(0xFF8899AA), size: 20),
-        title: Text(item.label,
-            style: TextStyle(
-                color: isSelected ? Colors.white : const Color(0xFF8899AA),
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
-        onTap: () => onSelect(item.section),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-        minLeadingWidth: 20,
-      ),
-    );
-  }
-
-  Widget _buildBadgeItem(BuildContext context, _NavItem item, bool isSelected) {
-    final count = _pending(context, item);
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      child: ListTile(
-        dense: true,
-        leading: Icon(item.icon, color: const Color(0xFF8899AA), size: 20),
-        title: Text(item.label,
-            style: const TextStyle(color: Color(0xFF8899AA), fontSize: 13)),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
-            color: AppColors.accent,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text('$count',
-              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-        ),
-        onTap: () => onSelect(item.section),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-        minLeadingWidth: 20,
       ),
     );
   }
 }
 
-// ─── Top Bar ─────────────────────────────────────────────────────────────────
-
-class _AdminTopBar extends StatelessWidget {
-  final AdminSection section;
-  const _AdminTopBar({required this.section});
-
-  static const _titles = {
-    AdminSection.dashboard:       'Dashboard',
-    AdminSection.pendingListings: 'Onay Bekleyen İlanlar',
-    AdminSection.allListings:     'Tüm İlanlar',
-    AdminSection.users:           'Kullanıcı Yönetimi',
-    AdminSection.messages:        'Mesajlar',
-    AdminSection.reports:         'Raporlar',
-    AdminSection.categories:      'Kategori Yönetimi',
-  };
+class _NavTile extends StatelessWidget {
+  final _NavItem item;
+  final bool selected;
+  final VoidCallback onTap;
+  const _NavTile({required this.item, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
+    // Pending badge
+    int pending = 0;
+    if (item.section == AdminSection.pending) {
+      try {
+        pending = Provider.of<ListingProvider>(context)
+            .allListings
+            .where((l) => l.status == ListingStatus.pending)
+            .length;
+      } catch (_) {}
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(item.icon, size: 18,
+                color: selected ? Colors.white : const Color(0xFF94A3B8)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(item.label,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      color: selected ? Colors.white : const Color(0xFF94A3B8))),
+            ),
+            if (pending > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.error,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$pending',
+                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Top Bar ───────────────────────────────────────────────────────────────────
+
+class _TopBar extends StatelessWidget {
+  final String title;
+  const _TopBar({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      height: 64,
+      height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -243,43 +221,19 @@ class _AdminTopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(_titles[section] ?? '',
-              style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+          Text(title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           const Spacer(),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(
-              color: AppColors.success.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(color: AppColors.successLight, borderRadius: BorderRadius.circular(6)),
+            child: const Row(
               children: [
-                Container(width: 7, height: 7,
-                    decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle)),
-                const SizedBox(width: 5),
-                const Text('Canlı', style: TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.w600)),
+                CircleAvatar(radius: 4, backgroundColor: AppColors.success),
+                SizedBox(width: 6),
+                Text('Canlı', style: TextStyle(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.w600)),
               ],
             ),
-          ),
-          const SizedBox(width: 16),
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-            child: Text(
-              auth.displayName.isNotEmpty ? auth.displayName[0].toUpperCase() : 'A',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(auth.displayName,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-              const Text('Yönetici', style: TextStyle(fontSize: 11, color: AppColors.textLight)),
-            ],
           ),
         ],
       ),
@@ -290,7 +244,6 @@ class _AdminTopBar extends StatelessWidget {
 class _NavItem {
   final AdminSection section;
   final IconData icon;
-  final IconData activeIcon;
   final String label;
-  const _NavItem(this.section, this.icon, this.activeIcon, this.label);
+  const _NavItem(this.section, this.icon, this.label);
 }

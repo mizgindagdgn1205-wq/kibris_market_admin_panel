@@ -6,445 +6,283 @@ import '../theme/app_theme.dart';
 
 class WebAdminUsers extends StatefulWidget {
   const WebAdminUsers({super.key});
-
   @override
   State<WebAdminUsers> createState() => _WebAdminUsersState();
 }
 
 class _WebAdminUsersState extends State<WebAdminUsers> {
+  final _searchCtrl = TextEditingController();
   String _search = '';
-  UserModel? _selected;
+  String? _filter; // 'admin' | 'banned' | null
+  int _page = 0;
+  static const _perPage = 25;
+
+  @override
+  void dispose() { _searchCtrl.dispose(); super.dispose(); }
+
+  List<UserModel> _filtered(List<UserModel> all) {
+    var list = all;
+    if (_search.isNotEmpty) {
+      final q = _search.toLowerCase();
+      list = list.where((u) =>
+          u.displayName.toLowerCase().contains(q) ||
+          u.email.toLowerCase().contains(q)).toList();
+    }
+    if (_filter == 'admin')  list = list.where((u) => u.isAdmin).toList();
+    if (_filter == 'banned') list = list.where((u) => u.isBanned).toList();
+    return list;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<UserProvider>();
+    final prov = context.watch<UserProvider>();
+    final filtered = _filtered(prov.users);
+    final totalPages = (filtered.length / _perPage).ceil().clamp(1, 99999);
+    final safePage = _page.clamp(0, totalPages - 1);
+    final pageItems = filtered.skip(safePage * _perPage).take(_perPage).toList();
 
-    if (provider.loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (provider.error != null) {
-      return Center(child: Text('Hata: ${provider.error}', style: const TextStyle(color: Colors.red)));
-    }
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(title: 'Kullanıcılar', subtitle: '${filtered.length} kullanıcı'),
+          const SizedBox(height: 16),
 
-    final users = provider.users;
-    final filtered = _search.isEmpty
-        ? users
-        : users.where((u) {
-            final q = _search.toLowerCase();
-            return u.displayName.toLowerCase().contains(q) ||
-                u.email.toLowerCase().contains(q) ||
-                u.phone.contains(q);
-          }).toList();
+          // Filters
+          AdminCard(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(children: [
+              Expanded(
+                flex: 3,
+                child: SizedBox(
+                  height: 38,
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: (v) => setState(() { _search = v; _page = 0; }),
+                    decoration: const InputDecoration(
+                      hintText: 'İsim veya e-posta ara...',
+                      prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textLight),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _FilterChip(label: 'Admin', selected: _filter == 'admin',
+                  onTap: () => setState(() { _filter = _filter == 'admin' ? null : 'admin'; _page = 0; })),
+              const SizedBox(width: 8),
+              _FilterChip(label: 'Engellendi', selected: _filter == 'banned', color: AppColors.error,
+                  onTap: () => setState(() { _filter = _filter == 'banned' ? null : 'banned'; _page = 0; })),
+              if (_search.isNotEmpty || _filter != null) ...[
+                const SizedBox(width: 10),
+                TextButton(
+                  onPressed: () => setState(() { _search = ''; _filter = null; _searchCtrl.clear(); _page = 0; }),
+                  child: const Text('Temizle', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ]),
+          ),
+          const SizedBox(height: 12),
 
-    return Row(
-      children: [
-        Expanded(
-          flex: 3,
-          child: Column(
-            children: [
-              // Toolbar
-              Container(
-                color: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 280,
-                      child: TextField(
-                        onChanged: (v) => setState(() => _search = v),
-                        decoration: InputDecoration(
-                          hintText: 'Kullanıcı ara…',
-                          hintStyle: const TextStyle(fontSize: 13, color: AppColors.textLight),
-                          prefixIcon: const Icon(Icons.search, size: 18, color: AppColors.textLight),
-                          filled: true,
-                          fillColor: AppColors.background,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
+          // Table
+          Expanded(
+            child: AdminCard(
+              padding: EdgeInsets.zero,
+              child: Column(children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  decoration: const BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+                  ),
+                  child: const Row(children: [
+                    _TH('Kullanıcı',  flex: 4),
+                    _TH('E-posta',    flex: 3),
+                    _TH('Rol',        flex: 2),
+                    _TH('Durum',      flex: 2),
+                    _TH('Kayıt',      flex: 2),
+                    _TH('İşlem',      flex: 2),
+                  ]),
+                ),
+                const Divider(),
+                Expanded(
+                  child: pageItems.isEmpty
+                      ? const Center(child: Text('Kullanıcı bulunamadı', style: TextStyle(color: AppColors.textLight)))
+                      : ListView.separated(
+                          itemCount: pageItems.length,
+                          separatorBuilder: (c, i) => const Divider(height: 1),
+                          itemBuilder: (c, i) => _UserRow(
+                            user: pageItems[i],
+                            onToggleAdmin: () => prov.setAdmin(pageItems[i].uid, !pageItems[i].isAdmin),
+                            onToggleBan:   () => prov.setBanned(pageItems[i].uid, !pageItems[i].isBanned),
                           ),
                         ),
-                      ),
-                    ),
-                    const Spacer(),
-                    Text('${filtered.length} kullanıcı',
-                        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                  ],
                 ),
-              ),
-              const Divider(height: 1, color: AppColors.divider),
-              // Table header
-              Container(
-                color: const Color(0xFFF8F9FB),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                child: const Row(
-                  children: [
-                    SizedBox(width: 40),
-                    SizedBox(width: 12),
-                    Expanded(flex: 2, child: _HeaderText('Ad Soyad')),
-                    Expanded(flex: 2, child: _HeaderText('E-posta')),
-                    Expanded(flex: 1, child: _HeaderText('Telefon')),
-                    Expanded(flex: 1, child: _HeaderText('Üyelik')),
-                    Expanded(flex: 1, child: _HeaderText('Durum')),
-                    SizedBox(width: 80, child: _HeaderText('İşlem')),
-                  ],
-                ),
-              ),
-              const Divider(height: 1, color: AppColors.divider),
-              Expanded(
-                child: filtered.isEmpty
-                    ? const Center(
-                        child: Text('Kullanıcı bulunamadı',
-                            style: TextStyle(color: AppColors.textLight)),
-                      )
-                    : ListView.separated(
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, _) =>
-                            const Divider(height: 1, color: AppColors.divider),
-                        itemBuilder: (_, i) {
-                          final u = filtered[i];
-                          final isSelected = _selected?.uid == u.uid;
-                          return InkWell(
-                            onTap: () => setState(
-                                () => _selected = isSelected ? null : u),
-                            child: Container(
-                              color: isSelected
-                                  ? AppColors.primary.withValues(alpha: 0.05)
-                                  : Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 10),
-                              child: Row(
-                                children: [
-                                  CircleAvatar(
-                                    radius: 20,
-                                    backgroundImage: u.photoUrl != null
-                                        ? NetworkImage(u.photoUrl!)
-                                        : null,
-                                    backgroundColor:
-                                        AppColors.primary.withValues(alpha: 0.1),
-                                    child: u.photoUrl == null
-                                        ? Text(
-                                            u.displayName.isNotEmpty
-                                                ? u.displayName[0].toUpperCase()
-                                                : '?',
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                color: AppColors.primary,
-                                                fontSize: 14),
-                                          )
-                                        : null,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(u.displayName,
-                                            style: const TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w500,
-                                                color: AppColors.textPrimary)),
-                                        Text(u.phone,
-                                            style: const TextStyle(
-                                                fontSize: 11,
-                                                color: AppColors.textLight)),
-                                      ],
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Text(u.email,
-                                        style: const TextStyle(
-                                            fontSize: 12,
-                                            color: AppColors.textSecondary),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
-                                  ),
-                                  Expanded(
-                                    flex: 1,
-                                    child: Text(u.phone,
-                                        style: const TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.textSecondary),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
-                                  ),
-                                  Expanded(
-                                    flex: 1,
-                                    child: Text(
-                                      '${u.createdAt.day}.${u.createdAt.month}.${u.createdAt.year}',
-                                      style: const TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.textLight),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 1,
-                                    child: _UserBadge(
-                                        isAdmin: u.isAdmin,
-                                        isBanned: u.isBanned),
-                                  ),
-                                  SizedBox(
-                                    width: 80,
-                                    child: Row(
-                                      children: [
-                                        if (!u.isAdmin)
-                                          _UserBtn(
-                                            icon: u.isBanned
-                                                ? Icons.lock_open
-                                                : Icons.block,
-                                            color: u.isBanned
-                                                ? AppColors.success
-                                                : Colors.red,
-                                            tooltip: u.isBanned
-                                                ? 'Yasağı Kaldır'
-                                                : 'Yasakla',
-                                            onTap: () => context
-                                                .read<UserProvider>()
-                                                .setBanned(
-                                                    u.uid, !u.isBanned),
-                                          ),
-                                        const SizedBox(width: 4),
-                                        _UserBtn(
-                                          icon: u.isAdmin
-                                              ? Icons.admin_panel_settings
-                                              : Icons
-                                                  .admin_panel_settings_outlined,
-                                          color: u.isAdmin
-                                              ? Colors.purple
-                                              : AppColors.textLight,
-                                          tooltip: u.isAdmin
-                                              ? 'Admin yetkisini kaldır'
-                                              : 'Admin yap',
-                                          onTap: () => context
-                                              .read<UserProvider>()
-                                              .setAdmin(u.uid, !u.isAdmin),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
-        ),
-        if (_selected != null) ...[
-          const VerticalDivider(width: 1, color: AppColors.divider),
-          SizedBox(
-            width: 300,
-            child: _UserDetailPanel(
-              user: _selected!,
-              onClose: () => setState(() => _selected = null),
+                const Divider(),
+                _Pagination(page: safePage, total: totalPages, count: filtered.length, perPage: _perPage,
+                    onPage: (p) => setState(() { _page = p; })),
+              ]),
             ),
           ),
         ],
-      ],
+      ),
     );
   }
 }
 
-class _HeaderText extends StatelessWidget {
-  final String text;
-  const _HeaderText(this.text);
+// ── User Row ──────────────────────────────────────────────────────────────────
+
+class _UserRow extends StatelessWidget {
+  final UserModel user;
+  final VoidCallback onToggleAdmin;
+  final VoidCallback onToggleBan;
+  const _UserRow({required this.user, required this.onToggleAdmin, required this.onToggleBan});
+
+  String _date(DateTime? d) {
+    if (d == null) return '-';
+    return '${d.day.toString().padLeft(2,'0')}.${d.month.toString().padLeft(2,'0')}.${d.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Text(text,
-        style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary));
+    final u = user;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Row(children: [
+        // Avatar + name
+        Expanded(flex: 4, child: Row(children: [
+          CircleAvatar(
+            radius: 17,
+            backgroundColor: AppColors.primaryLight,
+            backgroundImage: u.photoUrl != null ? NetworkImage(u.photoUrl!) : null,
+            child: u.photoUrl == null
+                ? Text(u.displayName.isNotEmpty ? u.displayName[0].toUpperCase() : '?',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary))
+                : null,
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(u.displayName.isNotEmpty ? u.displayName : 'İsimsiz',
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+        ])),
+        Expanded(flex: 3, child: _cell(u.email)),
+        Expanded(flex: 2, child: u.isAdmin
+            ? const StatusBadge(label: 'Admin', color: AppColors.primary, bg: AppColors.primaryLight)
+            : const StatusBadge(label: 'Üye', color: AppColors.textSecondary, bg: AppColors.background)),
+        Expanded(flex: 2, child: u.isBanned
+            ? const StatusBadge(label: 'Engelli', color: AppColors.error, bg: AppColors.errorLight)
+            : const StatusBadge(label: 'Aktif', color: AppColors.success, bg: AppColors.successLight)),
+        Expanded(flex: 2, child: _cell(_date(u.createdAt))),
+        Expanded(flex: 2, child: Row(children: [
+          _ActionBtn(
+            label: u.isAdmin ? 'Admin Al' : 'Admin Yap',
+            color: AppColors.primary,
+            onTap: onToggleAdmin,
+          ),
+          const SizedBox(width: 6),
+          _ActionBtn(
+            label: u.isBanned ? 'Aç' : 'Engelle',
+            color: u.isBanned ? AppColors.success : AppColors.error,
+            onTap: onToggleBan,
+          ),
+        ])),
+      ]),
+    );
   }
+
+  Widget _cell(String t) => Text(t, maxLines: 1, overflow: TextOverflow.ellipsis,
+      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary));
 }
 
-class _UserBadge extends StatelessWidget {
-  final bool isAdmin;
-  final bool isBanned;
-
-  const _UserBadge({required this.isAdmin, required this.isBanned});
+class _ActionBtn extends StatelessWidget {
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _ActionBtn({required this.label, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    if (isBanned) return _badge('Yasaklı', Colors.red);
-    if (isAdmin) return _badge('Admin', Colors.purple);
-    return _badge('Aktif', AppColors.success);
-  }
-
-  Widget _badge(String label, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: color)),
-      );
-}
-
-class _UserBtn extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  const _UserBtn(
-      {required this.icon,
-      required this.color,
-      required this.tooltip,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(icon, size: 16, color: color),
-        ),
+        child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
       ),
     );
   }
 }
 
-class _UserDetailPanel extends StatelessWidget {
-  final UserModel user;
-  final VoidCallback onClose;
+// ── Filter Chip ───────────────────────────────────────────────────────────────
 
-  const _UserDetailPanel({required this.user, required this.onClose});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.divider)),
-            ),
-            child: Row(
-              children: [
-                const Text('Kullanıcı Detayı',
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary)),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: onClose,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: CircleAvatar(
-                      radius: 36,
-                      backgroundImage: user.photoUrl != null
-                          ? NetworkImage(user.photoUrl!)
-                          : null,
-                      backgroundColor:
-                          AppColors.primary.withValues(alpha: 0.1),
-                      child: user.photoUrl == null
-                          ? Text(
-                              user.displayName.isNotEmpty
-                                  ? user.displayName[0].toUpperCase()
-                                  : '?',
-                              style: const TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary),
-                            )
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: Text(user.displayName,
-                        style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary)),
-                  ),
-                  const SizedBox(height: 4),
-                  Center(
-                      child: _UserBadge(
-                          isAdmin: user.isAdmin, isBanned: user.isBanned)),
-                  const SizedBox(height: 20),
-                  _DetailRow(label: 'E-posta', value: user.email),
-                  _DetailRow(label: 'Telefon', value: user.phone),
-                  _DetailRow(label: 'Kullanıcı ID', value: user.uid),
-                  _DetailRow(
-                      label: 'Üyelik Tarihi',
-                      value:
-                          '${user.createdAt.day}.${user.createdAt.month}.${user.createdAt.year}'),
-                  if (user.bio != null && user.bio!.isNotEmpty)
-                    _DetailRow(label: 'Hakkında', value: user.bio!),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
+class _FilterChip extends StatelessWidget {
   final String label;
-  final String value;
-
-  const _DetailRow({required this.label, required this.value});
+  final bool selected;
+  final VoidCallback onTap;
+  final Color color;
+  const _FilterChip({required this.label, required this.selected, required this.onTap, this.color = AppColors.primary});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 100,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textLight)),
-          ),
-          Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w500)),
-          ),
-        ],
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.1) : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: selected ? color : AppColors.divider),
+        ),
+        child: Text(label,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: selected ? color : AppColors.textSecondary)),
       ),
     );
   }
+}
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+
+class _Pagination extends StatelessWidget {
+  final int page, total, count, perPage;
+  final void Function(int) onPage;
+  const _Pagination({required this.page, required this.total, required this.count, required this.perPage, required this.onPage});
+
+  @override
+  Widget build(BuildContext context) {
+    final from = page * perPage + 1;
+    final to = (page * perPage + perPage).clamp(0, count);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Row(children: [
+        Text('$from–$to / $count', style: const TextStyle(fontSize: 12, color: AppColors.textLight)),
+        const Spacer(),
+        IconButton(icon: const Icon(Icons.chevron_left), onPressed: page > 0 ? () => onPage(page - 1) : null,
+            iconSize: 20, padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+        const SizedBox(width: 8),
+        Text('${page + 1} / $total', style: const TextStyle(fontSize: 12)),
+        const SizedBox(width: 8),
+        IconButton(icon: const Icon(Icons.chevron_right), onPressed: page < total - 1 ? () => onPage(page + 1) : null,
+            iconSize: 20, padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+      ]),
+    );
+  }
+}
+
+class _TH extends StatelessWidget {
+  final String label;
+  final int flex;
+  const _TH(this.label, {required this.flex});
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        flex: flex,
+        child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+            color: AppColors.textLight, letterSpacing: 0.4)),
+      );
 }
