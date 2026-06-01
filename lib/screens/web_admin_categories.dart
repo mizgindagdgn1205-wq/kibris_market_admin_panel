@@ -15,7 +15,7 @@ class _WebAdminCategoriesState extends State<WebAdminCategories>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -38,6 +38,7 @@ class _WebAdminCategoriesState extends State<WebAdminCategories>
             tabs: const [
               Tab(text: 'Kategoriler'),
               Tab(text: 'Araç Verileri'),
+              Tab(text: 'Form Şemaları'),
             ],
           ),
         ),
@@ -47,6 +48,7 @@ class _WebAdminCategoriesState extends State<WebAdminCategories>
             children: const [
               _CategoriesTab(),
               _VehicleDataTab(),
+              _SchemasTab(),
             ],
           ),
         ),
@@ -177,10 +179,15 @@ class _CategoriesTabState extends State<_CategoriesTab> {
                                     : _expanded.add(id)),
                             onAddChild: (id) => _addChild(id, all),
                             onDelete: (id) => _deleteRecursive(id, all),
-                            onSave: (id, name, icon, color) => _db
+                            onSave: (id, name, icon, color, schemaId) => _db
                                 .collection('categories')
                                 .doc(id)
-                                .update({'name': name, 'icon': icon, 'color': color}),
+                                .update({
+                                  'name': name,
+                                  'icon': icon,
+                                  'color': color,
+                                  if (schemaId != null) 'schemaId': schemaId,
+                                }),
                           ),
                         ),
                 ),
@@ -201,7 +208,7 @@ class _CategoryTreeNode extends StatelessWidget {
   final void Function(String id) onToggle;
   final void Function(String parentId) onAddChild;
   final void Function(String id) onDelete;
-  final Future<void> Function(String id, String name, String icon, int color) onSave;
+  final Future<void> Function(String id, String name, String icon, int color, String? schemaId) onSave;
 
   const _CategoryTreeNode({
     required this.doc,
@@ -213,6 +220,7 @@ class _CategoryTreeNode extends StatelessWidget {
     required this.onDelete,
     required this.onSave,
   });
+
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +246,7 @@ class _CategoryTreeNode extends StatelessWidget {
           onToggle: () => onToggle(doc.id),
           onAddChild: () => onAddChild(doc.id),
           onDelete: () => onDelete(doc.id),
-          onSave: (name, icon, color) => onSave(doc.id, name, icon, color),
+          onSave: (name, icon, color, schemaId) => onSave(doc.id, name, icon, color, schemaId),
         ),
         if (isExpanded)
           ...children.map((c) => _CategoryTreeNode(
@@ -266,7 +274,7 @@ class _CategoryRow extends StatefulWidget {
   final VoidCallback onToggle;
   final VoidCallback onAddChild;
   final VoidCallback onDelete;
-  final Future<void> Function(String name, String icon, int color) onSave;
+  final Future<void> Function(String name, String icon, int color, String? schemaId) onSave;
 
   const _CategoryRow({
     required this.doc,
@@ -289,6 +297,7 @@ class _CategoryRowState extends State<_CategoryRow> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _iconCtrl;
   late final TextEditingController _colorCtrl;
+  late final TextEditingController _schemaCtrl;
   bool _saving = false;
 
   @override
@@ -301,6 +310,7 @@ class _CategoryRowState extends State<_CategoryRow> {
             .toRadixString(16)
             .padLeft(8, '0')
             .toUpperCase());
+    _schemaCtrl = TextEditingController(text: widget.data['schemaId'] ?? '');
   }
 
   @override
@@ -308,6 +318,7 @@ class _CategoryRowState extends State<_CategoryRow> {
     _nameCtrl.dispose();
     _iconCtrl.dispose();
     _colorCtrl.dispose();
+    _schemaCtrl.dispose();
     super.dispose();
   }
 
@@ -316,7 +327,13 @@ class _CategoryRowState extends State<_CategoryRow> {
     final colorVal =
         int.tryParse(_colorCtrl.text.replaceFirst('#', ''), radix: 16) ??
             0xFF1A4F9C;
-    await widget.onSave(_nameCtrl.text.trim(), _iconCtrl.text.trim(), colorVal);
+    final schema = _schemaCtrl.text.trim();
+    await widget.onSave(
+      _nameCtrl.text.trim(),
+      _iconCtrl.text.trim(),
+      colorVal,
+      schema.isEmpty ? null : schema,
+    );
     if (mounted) setState(() { _saving = false; _editing = false; });
   }
 
@@ -358,6 +375,14 @@ class _CategoryRowState extends State<_CategoryRow> {
                           child: TextField(
                             controller: _colorCtrl,
                             decoration: _deco('Renk hex (ör: FF1565C0)'),
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _schemaCtrl,
+                            decoration: _deco('Şema ID (ör: phone, laptop)'),
                             style: const TextStyle(fontSize: 13),
                           ),
                         ),
@@ -436,6 +461,17 @@ class _CategoryRowState extends State<_CategoryRow> {
                                   : FontWeight.normal,
                               color: const Color(0xFF1A2035))),
                     ),
+                    if ((widget.data['schemaId'] as String?) != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        margin: const EdgeInsets.only(right: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A4F9C).withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(widget.data['schemaId'] as String,
+                            style: const TextStyle(fontSize: 9, color: Color(0xFF1A4F9C), fontWeight: FontWeight.w600)),
+                      ),
                     Text(widget.data['icon'] ?? '',
                         style: const TextStyle(
                             fontSize: 10, color: Color(0xFF8899AA))),
@@ -859,4 +895,522 @@ class _VehicleDataTabState extends State<_VehicleDataTab> {
       },
     );
   }
+}
+
+// ── Form Şemaları Tab ─────────────────────────────────────────────────────────
+
+class _SchemasTab extends StatefulWidget {
+  const _SchemasTab();
+  @override
+  State<_SchemasTab> createState() => _SchemasTabState();
+}
+
+class _SchemasTabState extends State<_SchemasTab> {
+  final _db = FirebaseFirestore.instance;
+  String? _selectedSchemaId;
+  int? _selectedSectionIdx;
+  int? _selectedFieldIdx;
+  bool _saving = false;
+
+  static const _primary = Color(0xFF1A4F9C);
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _db.collection('listing_field_schemas').snapshots(),
+      builder: (ctx, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final schemas = snap.data!.docs.toList()..sort((a, b) => a.id.compareTo(b.id));
+
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Sol: Şema listesi ──────────────────────────────────────────
+              _panel(
+                width: 200,
+                header: Row(
+                  children: [
+                    const Text('Şemalar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A2035))),
+                    const Spacer(),
+                    _iconBtn(Icons.add, 'Yeni şema', () => _addSchema()),
+                  ],
+                ),
+                child: ListView.builder(
+                  itemCount: schemas.length,
+                  itemBuilder: (_, i) {
+                    final id = schemas[i].id;
+                    final sel = _selectedSchemaId == id;
+                    return ListTile(
+                      dense: true,
+                      selected: sel,
+                      selectedTileColor: _primary.withValues(alpha: 0.07),
+                      title: Text(id, style: TextStyle(fontSize: 12, color: sel ? _primary : const Color(0xFF1A2035))),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 14, color: Colors.red),
+                        onPressed: () => _deleteSchema(id),
+                        padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                      ),
+                      onTap: () => setState(() {
+                        _selectedSchemaId = id;
+                        _selectedSectionIdx = null;
+                        _selectedFieldIdx = null;
+                      }),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // ── Orta: Section/Field ağacı ──────────────────────────────────
+              if (_selectedSchemaId != null)
+                StreamBuilder<DocumentSnapshot>(
+                  stream: _db.collection('listing_field_schemas').doc(_selectedSchemaId).snapshots(),
+                  builder: (ctx, sdoc) {
+                    if (!sdoc.hasData || !sdoc.data!.exists) return const SizedBox();
+                    final data = sdoc.data!.data() as Map<String, dynamic>;
+                    final sections = (data['sections'] as List? ?? []).cast<Map<String, dynamic>>();
+
+                    return _panel(
+                      width: 280,
+                      header: Row(
+                        children: [
+                          Expanded(child: Text(_selectedSchemaId!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A2035)), overflow: TextOverflow.ellipsis)),
+                          _iconBtn(Icons.add, 'Section ekle', () => _addSection(sections)),
+                        ],
+                      ),
+                      child: ListView.builder(
+                        itemCount: sections.length,
+                        itemBuilder: (_, si) {
+                          final section = sections[si];
+                          final fields = (section['fields'] as List? ?? []).cast<Map<String, dynamic>>();
+                          final selSec = _selectedSectionIdx == si;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                color: selSec && _selectedFieldIdx == null
+                                    ? _primary.withValues(alpha: 0.07)
+                                    : const Color(0xFFF5F7FA),
+                                child: ListTile(
+                                  dense: true,
+                                  title: Text(section['title'] as String? ?? '(section)',
+                                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF8899AA))),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _iconBtn(Icons.add, 'Field ekle', () => _addField(sections, si)),
+                                      _iconBtn(Icons.delete_outline, 'Sil', () => _deleteSection(sections, si), color: Colors.red),
+                                    ],
+                                  ),
+                                  onTap: () => setState(() { _selectedSectionIdx = si; _selectedFieldIdx = null; }),
+                                ),
+                              ),
+                              ...fields.asMap().entries.map((fe) {
+                                final fi = fe.key;
+                                final field = fe.value;
+                                final selF = selSec && _selectedFieldIdx == fi;
+                                return ListTile(
+                                  dense: true,
+                                  selected: selF,
+                                  selectedTileColor: _primary.withValues(alpha: 0.07),
+                                  contentPadding: const EdgeInsets.only(left: 24, right: 8),
+                                  leading: Icon(_fieldTypeIcon(field['type'] as String? ?? 'text'), size: 14, color: selF ? _primary : const Color(0xFF8899AA)),
+                                  title: Text(field['label'] as String? ?? field['key'] as String? ?? '',
+                                      style: TextStyle(fontSize: 12, color: selF ? _primary : const Color(0xFF1A2035))),
+                                  subtitle: Text(field['type'] as String? ?? '', style: const TextStyle(fontSize: 10, color: Color(0xFF8899AA))),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.delete_outline, size: 13, color: Colors.red),
+                                    onPressed: () => _deleteField(sections, si, fi),
+                                    padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                                  ),
+                                  onTap: () => setState(() { _selectedSectionIdx = si; _selectedFieldIdx = fi; }),
+                                );
+                              }),
+                              const Divider(height: 1, color: Color(0xFFE8ECF0)),
+                            ],
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+              const SizedBox(width: 12),
+
+              // ── Sağ: Düzenleyici ──────────────────────────────────────────
+              if (_selectedSchemaId != null && _selectedSectionIdx != null)
+                Expanded(
+                  child: StreamBuilder<DocumentSnapshot>(
+                    stream: _db.collection('listing_field_schemas').doc(_selectedSchemaId).snapshots(),
+                    builder: (ctx, sdoc) {
+                      if (!sdoc.hasData || !sdoc.data!.exists) return const SizedBox();
+                      final data = sdoc.data!.data() as Map<String, dynamic>;
+                      final sections = (data['sections'] as List? ?? []).cast<Map<String, dynamic>>();
+                      if (_selectedSectionIdx! >= sections.length) return const SizedBox();
+                      final section = sections[_selectedSectionIdx!];
+                      final fields = (section['fields'] as List? ?? []).cast<Map<String, dynamic>>();
+
+                      if (_selectedFieldIdx == null) {
+                        return _SectionEditor(
+                          section: section,
+                          onSave: (updated) => _saveSection(sections, _selectedSectionIdx!, updated),
+                          saving: _saving,
+                        );
+                      }
+                      if (_selectedFieldIdx! >= fields.length) return const SizedBox();
+                      return _FieldEditor(
+                        field: fields[_selectedFieldIdx!],
+                        onSave: (updated) => _saveField(sections, _selectedSectionIdx!, _selectedFieldIdx!, updated),
+                        saving: _saving,
+                      );
+                    },
+                  ),
+                ),
+
+              if (_selectedSchemaId == null)
+                const Expanded(child: Center(child: Text('Bir şema seçin', style: TextStyle(color: Color(0xFF8899AA))))),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _panel({required double width, required Widget header, required Widget child}) {
+    return SizedBox(
+      width: width,
+      child: Container(
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE8ECF0))),
+        child: Column(
+          children: [
+            Padding(padding: const EdgeInsets.fromLTRB(12, 10, 8, 10), child: header),
+            const Divider(height: 1, color: Color(0xFFE8ECF0)),
+            Expanded(child: child),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _iconBtn(IconData icon, String tooltip, VoidCallback onTap, {Color? color}) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        icon: Icon(icon, size: 15, color: color ?? _primary),
+        onPressed: onTap,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  IconData _fieldTypeIcon(String type) {
+    switch (type) {
+      case 'select': return Icons.list;
+      case 'dependentSelect': return Icons.account_tree_outlined;
+      case 'number': case 'numberWithUnit': return Icons.tag;
+      case 'textarea': return Icons.notes;
+      case 'imagePicker': return Icons.image_outlined;
+      default: return Icons.text_fields;
+    }
+  }
+
+  Future<void> _addSchema() async {
+    final ctrl = TextEditingController();
+    final id = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Yeni Şema'),
+        content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Şema ID (ör: clothing)'), autofocus: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('İptal')),
+          TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()), child: const Text('Ekle')),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (id == null || id.isEmpty) return;
+    await _db.collection('listing_field_schemas').doc(id).set({
+      'id': id,
+      'sections': [
+        {'id': 'price_section', 'title': 'FİYAT', 'sortOrder': 0, 'fields': [
+          {'key': 'title', 'label': 'Başlık', 'type': 'text', 'required': true, 'placeholder': 'Başlık', 'sortOrder': 0},
+          {'key': 'price', 'label': 'Fiyat', 'type': 'number', 'required': true, 'placeholder': 'Fiyat', 'sortOrder': 1},
+          {'key': 'currency', 'label': 'Para Birimi', 'type': 'select', 'required': true, 'optionGroupId': 'currencies', 'defaultValue': 'GBP', 'sortOrder': 2},
+        ]},
+        {'id': 'desc_section', 'title': 'AÇIKLAMA', 'sortOrder': 2, 'fields': [
+          {'key': 'description', 'label': 'Açıklama', 'type': 'textarea', 'required': false, 'sortOrder': 0},
+        ]},
+        {'id': 'photos_section', 'title': 'FOTOĞRAFLAR', 'sortOrder': 99, 'fields': [
+          {'key': 'photos', 'label': 'Fotoğraflar', 'type': 'imagePicker', 'required': true, 'sortOrder': 0},
+        ]},
+      ],
+    });
+    setState(() { _selectedSchemaId = id; _selectedSectionIdx = null; _selectedFieldIdx = null; });
+  }
+
+  Future<void> _deleteSchema(String id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Şemayı Sil'),
+        content: Text('"$id" şeması silinsin mi?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('İptal')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sil', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await _db.collection('listing_field_schemas').doc(id).delete();
+    if (_selectedSchemaId == id) setState(() { _selectedSchemaId = null; _selectedSectionIdx = null; _selectedFieldIdx = null; });
+  }
+
+  Future<void> _addSection(List<Map<String, dynamic>> sections) async {
+    final updated = List<Map<String, dynamic>>.from(sections)..add({
+      'id': 'section_${DateTime.now().millisecondsSinceEpoch}',
+      'title': 'YENİ BÖLÜM',
+      'sortOrder': sections.length,
+      'fields': [],
+    });
+    await _db.collection('listing_field_schemas').doc(_selectedSchemaId).update({'sections': updated});
+    setState(() { _selectedSectionIdx = updated.length - 1; _selectedFieldIdx = null; });
+  }
+
+  Future<void> _deleteSection(List<Map<String, dynamic>> sections, int idx) async {
+    final updated = List<Map<String, dynamic>>.from(sections)..removeAt(idx);
+    await _db.collection('listing_field_schemas').doc(_selectedSchemaId).update({'sections': updated});
+    setState(() { _selectedSectionIdx = null; _selectedFieldIdx = null; });
+  }
+
+  Future<void> _saveSection(List<Map<String, dynamic>> sections, int idx, Map<String, dynamic> updated) async {
+    setState(() => _saving = true);
+    final list = List<Map<String, dynamic>>.from(sections);
+    list[idx] = updated;
+    await _db.collection('listing_field_schemas').doc(_selectedSchemaId).update({'sections': list});
+    if (mounted) setState(() => _saving = false);
+  }
+
+  Future<void> _addField(List<Map<String, dynamic>> sections, int si) async {
+    final section = Map<String, dynamic>.from(sections[si]);
+    final fields = List<Map<String, dynamic>>.from((section['fields'] as List? ?? []).cast<Map<String, dynamic>>());
+    fields.add({'key': 'field_${DateTime.now().millisecondsSinceEpoch}', 'label': 'Yeni Alan', 'type': 'text', 'required': false, 'sortOrder': fields.length});
+    section['fields'] = fields;
+    final updatedSections = List<Map<String, dynamic>>.from(sections)..[si] = section;
+    await _db.collection('listing_field_schemas').doc(_selectedSchemaId).update({'sections': updatedSections});
+    setState(() { _selectedSectionIdx = si; _selectedFieldIdx = fields.length - 1; });
+  }
+
+  Future<void> _deleteField(List<Map<String, dynamic>> sections, int si, int fi) async {
+    final section = Map<String, dynamic>.from(sections[si]);
+    final fields = List<Map<String, dynamic>>.from((section['fields'] as List? ?? []).cast<Map<String, dynamic>>())..removeAt(fi);
+    section['fields'] = fields;
+    final updatedSections = List<Map<String, dynamic>>.from(sections)..[si] = section;
+    await _db.collection('listing_field_schemas').doc(_selectedSchemaId).update({'sections': updatedSections});
+    setState(() { _selectedSectionIdx = si; _selectedFieldIdx = null; });
+  }
+
+  Future<void> _saveField(List<Map<String, dynamic>> sections, int si, int fi, Map<String, dynamic> updated) async {
+    setState(() => _saving = true);
+    final section = Map<String, dynamic>.from(sections[si]);
+    final fields = List<Map<String, dynamic>>.from((section['fields'] as List? ?? []).cast<Map<String, dynamic>>())..[fi] = updated;
+    section['fields'] = fields;
+    final updatedSections = List<Map<String, dynamic>>.from(sections)..[si] = section;
+    await _db.collection('listing_field_schemas').doc(_selectedSchemaId).update({'sections': updatedSections});
+    if (mounted) setState(() => _saving = false);
+  }
+}
+
+// ── Section düzenleyici ───────────────────────────────────────────────────────
+
+class _SectionEditor extends StatefulWidget {
+  final Map<String, dynamic> section;
+  final Future<void> Function(Map<String, dynamic>) onSave;
+  final bool saving;
+  const _SectionEditor({required this.section, required this.onSave, required this.saving});
+  @override
+  State<_SectionEditor> createState() => _SectionEditorState();
+}
+
+class _SectionEditorState extends State<_SectionEditor> {
+  late final TextEditingController _titleCtrl;
+  late final TextEditingController _idCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleCtrl = TextEditingController(text: widget.section['title'] as String? ?? '');
+    _idCtrl = TextEditingController(text: widget.section['id'] as String? ?? '');
+  }
+
+  @override
+  void dispose() { _titleCtrl.dispose(); _idCtrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return _editorShell(
+      title: 'Bölüm Düzenle',
+      saving: widget.saving,
+      onSave: () => widget.onSave({...widget.section, 'id': _idCtrl.text.trim(), 'title': _titleCtrl.text.trim()}),
+      children: [
+        _fieldWidget('Bölüm ID', _idCtrl),
+        const SizedBox(height: 12),
+        _fieldWidget('Başlık', _titleCtrl),
+      ],
+    );
+  }
+}
+
+// ── Field düzenleyici ─────────────────────────────────────────────────────────
+
+class _FieldEditor extends StatefulWidget {
+  final Map<String, dynamic> field;
+  final Future<void> Function(Map<String, dynamic>) onSave;
+  final bool saving;
+  const _FieldEditor({required this.field, required this.onSave, required this.saving});
+  @override
+  State<_FieldEditor> createState() => _FieldEditorState();
+}
+
+class _FieldEditorState extends State<_FieldEditor> {
+  late final TextEditingController _keyCtrl, _labelCtrl, _placeholderCtrl,
+      _unitCtrl, _optionGroupCtrl, _dependsOnCtrl, _defaultCtrl;
+  late String _type;
+  late bool _required;
+
+  static const _types = ['text', 'number', 'numberWithUnit', 'textarea', 'select', 'dependentSelect', 'imagePicker'];
+
+  @override
+  void initState() {
+    super.initState();
+    final f = widget.field;
+    _keyCtrl = TextEditingController(text: f['key'] as String? ?? '');
+    _labelCtrl = TextEditingController(text: f['label'] as String? ?? '');
+    _placeholderCtrl = TextEditingController(text: f['placeholder'] as String? ?? '');
+    _unitCtrl = TextEditingController(text: f['unit'] as String? ?? '');
+    _optionGroupCtrl = TextEditingController(text: f['optionGroupId'] as String? ?? '');
+    _dependsOnCtrl = TextEditingController(text: f['dependsOn'] as String? ?? '');
+    _defaultCtrl = TextEditingController(text: f['defaultValue'] as String? ?? '');
+    _type = f['type'] as String? ?? 'text';
+    _required = f['required'] as bool? ?? false;
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_keyCtrl, _labelCtrl, _placeholderCtrl, _unitCtrl, _optionGroupCtrl, _dependsOnCtrl, _defaultCtrl]) c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _editorShell(
+      title: 'Alan Düzenle',
+      saving: widget.saving,
+      onSave: () => widget.onSave({
+        'key': _keyCtrl.text.trim(),
+        'label': _labelCtrl.text.trim(),
+        'type': _type,
+        'required': _required,
+        if (_placeholderCtrl.text.isNotEmpty) 'placeholder': _placeholderCtrl.text.trim(),
+        if (_unitCtrl.text.isNotEmpty) 'unit': _unitCtrl.text.trim(),
+        if (_optionGroupCtrl.text.isNotEmpty) 'optionGroupId': _optionGroupCtrl.text.trim(),
+        if (_dependsOnCtrl.text.isNotEmpty) 'dependsOn': _dependsOnCtrl.text.trim(),
+        if (_defaultCtrl.text.isNotEmpty) 'defaultValue': _defaultCtrl.text.trim(),
+        'sortOrder': widget.field['sortOrder'] ?? 0,
+      }),
+      children: [
+        Row(children: [
+          Expanded(child: _fieldWidget('Alan Key', _keyCtrl)),
+          const SizedBox(width: 12),
+          Expanded(child: _fieldWidget('Etiket', _labelCtrl)),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Tip', style: TextStyle(fontSize: 12, color: Color(0xFF8899AA))),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<String>(
+                value: _type,
+                items: _types.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))).toList(),
+                onChanged: (v) => setState(() => _type = v!),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFDDE2EA))),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFDDE2EA))),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF1A4F9C), width: 1.5)),
+                ),
+              ),
+            ],
+          )),
+          const SizedBox(width: 12),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Zorunlu', style: TextStyle(fontSize: 12, color: Color(0xFF8899AA))),
+            Switch(value: _required, onChanged: (v) => setState(() => _required = v), activeColor: const Color(0xFF1A4F9C)),
+          ]),
+        ]),
+        const SizedBox(height: 12),
+        _fieldWidget('Placeholder', _placeholderCtrl),
+        if (_type == 'numberWithUnit') ...[const SizedBox(height: 12), _fieldWidget('Birim (ör: m², km)', _unitCtrl)],
+        if (_type == 'select' || _type == 'dependentSelect') ...[const SizedBox(height: 12), _fieldWidget('Option Group ID', _optionGroupCtrl)],
+        if (_type == 'dependentSelect') ...[const SizedBox(height: 12), _fieldWidget('Bağımlı Alan (dependsOn)', _dependsOnCtrl)],
+        const SizedBox(height: 12),
+        _fieldWidget('Varsayılan Değer', _defaultCtrl),
+      ],
+    );
+  }
+}
+
+Widget _editorShell({required String title, required bool saving, required VoidCallback onSave, required List<Widget> children}) {
+  return Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFFE8ECF0))),
+    child: ListView(
+      children: [
+        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A2035))),
+        const SizedBox(height: 16),
+        ...children,
+        const SizedBox(height: 20),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton(
+            onPressed: saving ? null : onSave,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1A4F9C),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: saving
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Kaydet', style: TextStyle(color: Colors.white, fontSize: 14)),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _fieldWidget(String label, TextEditingController ctrl) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF8899AA))),
+      const SizedBox(height: 4),
+      TextField(
+        controller: ctrl,
+        style: const TextStyle(fontSize: 13),
+        decoration: const InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          border: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFDDE2EA))),
+          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFFDDE2EA))),
+          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF1A4F9C), width: 1.5)),
+        ),
+      ),
+    ],
+  );
 }
