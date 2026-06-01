@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../providers/listing_provider.dart';
 import '../models/listing.dart';
 import '../theme/app_theme.dart';
+import 'web_admin_categories.dart';
 import 'web_admin_costs.dart';
 import 'web_admin_dashboard.dart';
 import 'web_admin_listings.dart';
@@ -11,7 +12,7 @@ import 'web_admin_messages.dart';
 import 'web_admin_reports.dart';
 import 'web_admin_users.dart';
 
-enum AdminSection { dashboard, pendingListings, allListings, users, messages, reports, costs }
+enum AdminSection { dashboard, pendingListings, allListings, users, messages, reports, costs, categories }
 
 class WebAdminShell extends StatefulWidget {
   const WebAdminShell({super.key});
@@ -31,6 +32,7 @@ class _WebAdminShellState extends State<WebAdminShell> {
     _NavItem(AdminSection.messages,        Icons.chat_bubble_outline,       Icons.chat_bubble,        'Mesajlar'),
     _NavItem(AdminSection.reports,         Icons.bar_chart_outlined,        Icons.bar_chart,          'Raporlar'),
     _NavItem(AdminSection.costs,           Icons.receipt_long_outlined,     Icons.receipt_long,       'Giderler'),
+    _NavItem(AdminSection.categories,      Icons.category_outlined,         Icons.category,           'Kategoriler'),
   ];
 
   @override
@@ -73,6 +75,7 @@ class _WebAdminShellState extends State<WebAdminShell> {
       AdminSection.messages        => const WebAdminMessages(),
       AdminSection.reports         => const WebAdminReports(),
       AdminSection.costs           => const WebAdminCosts(),
+      AdminSection.categories      => const WebAdminCategories(),
     };
   }
 }
@@ -229,6 +232,7 @@ class _AdminTopBar extends StatelessWidget {
     AdminSection.messages:        'Mesajlar',
     AdminSection.reports:         'Raporlar',
     AdminSection.costs:           'Yapay Zeka Giderleri',
+    AdminSection.categories:      'Kategori & Şema Yönetimi',
   };
 
   @override

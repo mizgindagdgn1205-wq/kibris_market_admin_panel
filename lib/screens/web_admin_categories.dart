@@ -73,12 +73,15 @@ class _CategoriesTabState extends State<_CategoriesTab> {
   Future<void> _addRoot(List<QueryDocumentSnapshot> all) async {
     final roots = all.where((d) => (d.data() as Map)['parentId'] == null);
     final ref = _db.collection('categories').doc();
-    await ref.set({
+    await ref.set(<String, dynamic>{
+      'id': ref.id,
       'name': 'Yeni Kategori',
       'icon': 'category',
-      'color': 0xFF1A4F9C,
-      'order': roots.length,
-      'parentId': null,
+      'color': 0xFF1A4F9C.toDouble(),
+      'order': roots.length.toDouble(),
+      'schemaId': 'generic',
+      'hasVehicleCatalog': false,
+      'isLeaf': false,
     });
     setState(() => _expanded.add(ref.id));
   }
@@ -86,12 +89,16 @@ class _CategoriesTabState extends State<_CategoriesTab> {
   Future<void> _addChild(String parentId, List<QueryDocumentSnapshot> all) async {
     final children = all.where((d) => (d.data() as Map)['parentId'] == parentId);
     final ref = _db.collection('categories').doc();
-    await ref.set({
+    await ref.set(<String, dynamic>{
+      'id': ref.id,
       'name': 'Yeni Alt Kategori',
       'icon': 'category',
-      'color': 0xFF1A4F9C,
-      'order': children.length,
+      'color': 0xFF1A4F9C.toDouble(),
+      'order': children.length.toDouble(),
       'parentId': parentId,
+      'schemaId': 'generic',
+      'hasVehicleCatalog': false,
+      'isLeaf': true,
     });
     setState(() => _expanded.add(parentId));
   }
@@ -186,7 +193,7 @@ class _CategoriesTabState extends State<_CategoriesTab> {
                                   'name': name,
                                   'icon': icon,
                                   'color': color,
-                                  if (schemaId != null) 'schemaId': schemaId,
+                                  'schemaId': ?schemaId,
                                 }),
                           ),
                         ),
@@ -221,17 +228,19 @@ class _CategoryTreeNode extends StatelessWidget {
     required this.onSave,
   });
 
-
   @override
   Widget build(BuildContext context) {
     final d = doc.data() as Map<String, dynamic>;
-    final children = all
+    final hasVehicleCatalog = d['hasVehicleCatalog'] as bool? ?? false;
+
+    final subcatChildren = all
         .where((s) => (s.data() as Map)['parentId'] == doc.id)
         .toList()
       ..sort((a, b) =>
           (((a.data() as Map)['order'] as int?) ?? 0)
               .compareTo(((b.data() as Map)['order'] as int?) ?? 0));
-    final hasChildren = children.isNotEmpty;
+
+    final hasChildren = subcatChildren.isNotEmpty || hasVehicleCatalog;
     final isExpanded = expanded.contains(doc.id);
 
     return Column(
@@ -248,8 +257,10 @@ class _CategoryTreeNode extends StatelessWidget {
           onDelete: () => onDelete(doc.id),
           onSave: (name, icon, color, schemaId) => onSave(doc.id, name, icon, color, schemaId),
         ),
-        if (isExpanded)
-          ...children.map((c) => _CategoryTreeNode(
+        if (isExpanded) ...[
+          if (hasVehicleCatalog)
+            _VehicleBrandsNode(categoryId: doc.id, depth: depth + 1),
+          ...subcatChildren.map((c) => _CategoryTreeNode(
                 doc: c,
                 all: all,
                 depth: depth + 1,
@@ -259,11 +270,319 @@ class _CategoryTreeNode extends StatelessWidget {
                 onDelete: onDelete,
                 onSave: onSave,
               )),
+        ],
       ],
     );
   }
 }
 
+
+// ── Vehicle Brands Node ───────────────────────────────────────────────────────
+
+class _VehicleBrandsNode extends StatefulWidget {
+  final String categoryId;
+  final int depth;
+  const _VehicleBrandsNode({required this.categoryId, required this.depth});
+
+  @override
+  State<_VehicleBrandsNode> createState() => _VehicleBrandsNodeState();
+}
+
+class _VehicleBrandsNodeState extends State<_VehicleBrandsNode> {
+  final _db = FirebaseFirestore.instance;
+  final Set<String> _expandedBrands = {};
+  late Future<Map<String, List<String>>> _future;
+  Map<String, List<String>>? _cachedData;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _loadData();
+  }
+
+  // Firestore'a sorgu atmadan sadece local state'i günceller
+  void _updateLocal(void Function(Map<String, List<String>> data) updater) {
+    if (!mounted) return;
+    final current = Map<String, List<String>>.from(_cachedData ?? {});
+    updater(current);
+    setState(() {
+      _cachedData = current;
+      _future = Future.value(current);
+    });
+  }
+
+  double get _indent => 16.0 + widget.depth * 24.0;
+
+  // Kullanıcı tarafıyla aynı koleksiyonları oku
+  static const _catCollectionMap = <String, String>{
+    'arazi_suv': 'arazi_suv_brands',
+    'motosiklet': 'motosiklet_brands',
+  };
+
+  String get _brandsCollection =>
+      _catCollectionMap[widget.categoryId] ?? 'vehicle_brands';
+
+  Future<Map<String, List<String>>> _loadData() async {
+    try {
+      final col = _brandsCollection;
+      // client-side filtreleme — arrayContains Firestore web'de index gerektirir
+      final allBrandsSnap = await _db.collection(col).get();
+
+      final brandDocs = allBrandsSnap.docs.where((d) {
+        if (col != 'vehicle_brands') return true;
+        final ids = (d.data() as Map)['categoryIds'];
+        if (ids == null) return false;
+        return (ids as List).contains(widget.categoryId);
+      }).toList()
+        ..sort((a, b) {
+          final ao = (a.data() as Map)['sortOrder'] as int? ?? 0;
+          final bo = (b.data() as Map)['sortOrder'] as int? ?? 0;
+          return ao.compareTo(bo);
+        });
+
+      final result = <String, List<String>>{};
+      for (final brandDoc in brandDocs) {
+        final brandName = (brandDoc.data() as Map)['name'] as String? ?? brandDoc.id;
+        try {
+          final modelsSnap = await _db
+              .collection(col)
+              .doc(brandDoc.id)
+              .collection('models')
+              .get();
+          final models = modelsSnap.docs.toList()
+            ..sort((a, b) {
+              final ao = (a.data() as Map)['sortOrder'] as int? ?? 0;
+              final bo = (b.data() as Map)['sortOrder'] as int? ?? 0;
+              return ao.compareTo(bo);
+            });
+          result[brandName] = models
+              .map((d) => (d.data() as Map)['name'] as String? ?? d.id)
+              .toList();
+        } catch (_) {
+          result[brandName] = [];
+        }
+      }
+      _cachedData = result;
+      return result;
+    } catch (e) {
+      debugPrint('[VehicleBrandsNode] _loadData hata: $e');
+      return {};
+    }
+  }
+
+  Future<String?> _brandDocId(String brandName) async {
+    final col = _brandsCollection;
+    final snap = await _db.collection(col).where('name', isEqualTo: brandName).limit(1).get();
+    if (snap.docs.isNotEmpty) return snap.docs.first.id;
+    // id'yi isimden türet
+    return brandName.toLowerCase().replaceAll(' ', '_').replaceAll('-', '_');
+  }
+
+  Future<void> _addBrand(Map<String, List<String>> current) async {
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Marka Ekle'),
+        content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Marka adı'), autofocus: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('İptal')),
+          TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()), child: const Text('Ekle')),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (name == null || name.isEmpty) return;
+    final col = _brandsCollection;
+    final docId = name.toLowerCase().replaceAll(' ', '_').replaceAll('-', '_');
+    final existing = await _db.collection(col).doc(docId).get();
+    final sortOrder = current.length;
+    if (existing.exists) {
+      // Marka zaten var — sadece bu kategoriyi ekle
+      if (col == 'vehicle_brands') {
+        await _db.collection(col).doc(docId).update({
+          'categoryIds': FieldValue.arrayUnion([widget.categoryId]),
+        });
+      }
+    } else {
+      final data = <String, dynamic>{
+        'id': docId,
+        'name': name,
+        'sortOrder': sortOrder,
+      };
+      if (col == 'vehicle_brands') {
+        data['categoryIds'] = [widget.categoryId];
+      }
+      debugPrint('[addBrand] col=$col docId=$docId data=$data');
+      try {
+        await _db.collection(col).doc(docId).set(data);
+        debugPrint('[addBrand] set başarılı');
+      } catch (e, st) {
+        debugPrint('[addBrand] set HATA: $e\n$st');
+      }
+    }
+    _updateLocal((data) => data[name] = []);
+  }
+
+  Future<void> _deleteBrand(String brandName) async {
+    final docId = await _brandDocId(brandName);
+    if (docId == null) return;
+    final col = _brandsCollection;
+    final models = await _db.collection(col).doc(docId).collection('models').get();
+    for (final m in models.docs) {
+      await m.reference.delete();
+    }
+    await _db.collection(col).doc(docId).delete();
+    _updateLocal((data) {
+      data.remove(brandName);
+      _expandedBrands.remove(brandName);
+    });
+  }
+
+  Future<void> _addModel(String brandName) async {
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('$brandName — Model Ekle'),
+        content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Model adı'), autofocus: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('İptal')),
+          TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()), child: const Text('Ekle')),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (name == null || name.isEmpty) return;
+    final brandDocId = await _brandDocId(brandName);
+    if (brandDocId == null) return;
+    final col = _brandsCollection;
+    final modelId = name.toLowerCase().replaceAll(' ', '_').replaceAll('-', '_');
+    final modelsCol = _db.collection(col).doc(brandDocId).collection('models');
+    final count = (await modelsCol.get()).docs.length;
+    await modelsCol.doc(modelId).set({'id': modelId, 'name': name, 'sortOrder': count}, SetOptions(merge: true));
+    _updateLocal((data) => data[brandName] = [...(data[brandName] ?? []), name]);
+  }
+
+  Future<void> _deleteModel(String brandName, String modelName) async {
+    final brandDocId = await _brandDocId(brandName);
+    if (brandDocId == null) return;
+    final col = _brandsCollection;
+    final modelId = modelName.toLowerCase().replaceAll(' ', '_').replaceAll('-', '_');
+    await _db.collection(col).doc(brandDocId).collection('models').doc(modelId).delete();
+    _updateLocal((data) {
+      data[brandName] = (data[brandName] ?? []).where((m) => m != modelName).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, List<String>>>(
+      future: _future,
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return Padding(
+            padding: EdgeInsets.only(left: _indent, top: 8, bottom: 8),
+            child: const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+        final data = snap.data!;
+        final brands = data.keys.toList()..sort();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row with "Markalar" label and add button
+            Container(
+              color: const Color(0xFFF5F7FA),
+              padding: EdgeInsets.only(left: _indent, right: 8, top: 4, bottom: 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.directions_car, size: 13, color: Color(0xFF8899AA)),
+                  const SizedBox(width: 6),
+                  const Text('Markalar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF8899AA))),
+                  const Spacer(),
+                  Tooltip(
+                    message: 'Marka ekle',
+                    child: InkWell(
+                      onTap: () => _addBrand(data),
+                      child: const Icon(Icons.add_circle_outline, size: 14, color: Color(0xFF1A4F9C)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ...brands.map((brand) {
+              final models = data[brand] ?? [];
+              final isExpanded = _expandedBrands.contains(brand);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    color: const Color(0xFFF8F9FB),
+                    padding: EdgeInsets.only(left: _indent + 8, right: 8, top: 3, bottom: 3),
+                    child: Row(
+                      children: [
+                        InkWell(
+                          onTap: () => setState(() => isExpanded ? _expandedBrands.remove(brand) : _expandedBrands.add(brand)),
+                          child: Icon(isExpanded ? Icons.expand_more : Icons.chevron_right, size: 15, color: const Color(0xFF8899AA)),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(brand, style: const TextStyle(fontSize: 12, color: Color(0xFF1A2035))),
+                        ),
+                        Text('${models.length} model', style: const TextStyle(fontSize: 10, color: Color(0xFF8899AA))),
+                        const SizedBox(width: 6),
+                        Tooltip(
+                          message: 'Model ekle',
+                          child: InkWell(
+                            onTap: () => _addModel(brand),
+                            child: const Icon(Icons.add_circle_outline, size: 13, color: Color(0xFF1A4F9C)),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Tooltip(
+                          message: 'Markayı sil',
+                          child: InkWell(
+                            onTap: () => _deleteBrand(brand),
+                            child: const Icon(Icons.delete_outline, size: 13, color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isExpanded)
+                    ...models.map((model) => Container(
+                          color: const Color(0xFFFAFBFC),
+                          padding: EdgeInsets.only(left: _indent + 32, right: 8, top: 2, bottom: 2),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.subdirectory_arrow_right, size: 11, color: Color(0xFFCCCCCC)),
+                              const SizedBox(width: 4),
+                              Expanded(child: Text(model, style: const TextStyle(fontSize: 11, color: Color(0xFF1A2035)))),
+                              Tooltip(
+                                message: 'Modeli sil',
+                                child: InkWell(
+                                  onTap: () => _deleteModel(brand, model),
+                                  child: const Icon(Icons.close, size: 12, color: Colors.red),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                  const Divider(height: 1, color: Color(0xFFEEF0F3)),
+                ],
+              );
+            }),
+            const Divider(height: 1, color: Color(0xFFE8ECF0)),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ── Category Row ──────────────────────────────────────────────────────────────
 
 class _CategoryRow extends StatefulWidget {
   final QueryDocumentSnapshot doc;
@@ -1299,7 +1618,9 @@ class _FieldEditorState extends State<_FieldEditor> {
 
   @override
   void dispose() {
-    for (final c in [_keyCtrl, _labelCtrl, _placeholderCtrl, _unitCtrl, _optionGroupCtrl, _dependsOnCtrl, _defaultCtrl]) c.dispose();
+    for (final c in [_keyCtrl, _labelCtrl, _placeholderCtrl, _unitCtrl, _optionGroupCtrl, _dependsOnCtrl, _defaultCtrl]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -1334,7 +1655,7 @@ class _FieldEditorState extends State<_FieldEditor> {
               const Text('Tip', style: TextStyle(fontSize: 12, color: Color(0xFF8899AA))),
               const SizedBox(height: 4),
               DropdownButtonFormField<String>(
-                value: _type,
+                initialValue: _type,
                 items: _types.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))).toList(),
                 onChanged: (v) => setState(() => _type = v!),
                 decoration: const InputDecoration(
@@ -1350,7 +1671,7 @@ class _FieldEditorState extends State<_FieldEditor> {
           const SizedBox(width: 12),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Zorunlu', style: TextStyle(fontSize: 12, color: Color(0xFF8899AA))),
-            Switch(value: _required, onChanged: (v) => setState(() => _required = v), activeColor: const Color(0xFF1A4F9C)),
+            Switch(value: _required, onChanged: (v) => setState(() => _required = v), activeThumbColor: const Color(0xFF1A4F9C)),
           ]),
         ]),
         const SizedBox(height: 12),
