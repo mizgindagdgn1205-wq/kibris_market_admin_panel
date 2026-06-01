@@ -291,24 +291,21 @@ class _VehicleBrandsNode extends StatefulWidget {
 class _VehicleBrandsNodeState extends State<_VehicleBrandsNode> {
   final _db = FirebaseFirestore.instance;
   final Set<String> _expandedBrands = {};
-  late Future<Map<String, List<String>>> _future;
   Map<String, List<String>>? _cachedData;
 
   @override
   void initState() {
     super.initState();
-    _future = _loadData();
+    _loadData().then((data) {
+      if (mounted) setState(() => _cachedData = data);
+    });
   }
 
-  // Firestore'a sorgu atmadan sadece local state'i günceller
   void _updateLocal(void Function(Map<String, List<String>> data) updater) {
     if (!mounted) return;
     final current = Map<String, List<String>>.from(_cachedData ?? {});
     updater(current);
-    setState(() {
-      _cachedData = current;
-      _future = Future.value(current);
-    });
+    setState(() => _cachedData = current);
   }
 
   double get _indent => 16.0 + widget.depth * 24.0;
@@ -477,17 +474,14 @@ class _VehicleBrandsNodeState extends State<_VehicleBrandsNode> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, List<String>>>(
-      future: _future,
-      builder: (context, snap) {
-        if (!snap.hasData) {
-          return Padding(
-            padding: EdgeInsets.only(left: _indent, top: 8, bottom: 8),
-            child: const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-          );
-        }
-        final data = snap.data!;
-        final brands = data.keys.toList()..sort();
+    final data = _cachedData;
+    if (data == null) {
+      return Padding(
+        padding: EdgeInsets.only(left: _indent, top: 8, bottom: 8),
+        child: const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    final brands = data.keys.toList()..sort();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -577,8 +571,6 @@ class _VehicleBrandsNodeState extends State<_VehicleBrandsNode> {
             const Divider(height: 1, color: Color(0xFFE8ECF0)),
           ],
         );
-      },
-    );
   }
 }
 
