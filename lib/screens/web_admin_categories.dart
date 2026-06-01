@@ -421,7 +421,26 @@ class _VehicleBrandsNodeState extends State<_VehicleBrandsNode> {
     _updateLocal((data) => data[name] = []);
   }
 
+  Future<bool> _confirm(String message) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Emin misin?'),
+        content: Text(message),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('İptal')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sil', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
   Future<void> _deleteBrand(String brandName) async {
+    if (!await _confirm('"$brandName" markası ve tüm modelleri silinsin mi?')) return;
     final docId = await _brandDocId(brandName);
     if (docId == null) return;
     final col = _brandsCollection;
@@ -462,6 +481,7 @@ class _VehicleBrandsNodeState extends State<_VehicleBrandsNode> {
   }
 
   Future<void> _deleteModel(String brandName, String modelName) async {
+    if (!await _confirm('"$modelName" modeli silinsin mi?')) return;
     final brandDocId = await _brandDocId(brandName);
     if (brandDocId == null) return;
     final col = _brandsCollection;
@@ -500,7 +520,7 @@ class _VehicleBrandsNodeState extends State<_VehicleBrandsNode> {
                     message: 'Marka ekle',
                     child: InkWell(
                       onTap: () => _addBrand(data),
-                      child: const Icon(Icons.add_circle_outline, size: 14, color: Color(0xFF1A4F9C)),
+                      child: const Icon(Icons.add_circle_outline, size: 20, color: Color(0xFF1A4F9C)),
                     ),
                   ),
                 ],
@@ -531,7 +551,7 @@ class _VehicleBrandsNodeState extends State<_VehicleBrandsNode> {
                           message: 'Model ekle',
                           child: InkWell(
                             onTap: () => _addModel(brand),
-                            child: const Icon(Icons.add_circle_outline, size: 13, color: Color(0xFF1A4F9C)),
+                            child: const Icon(Icons.add_circle_outline, size: 20, color: Color(0xFF1A4F9C)),
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -539,7 +559,7 @@ class _VehicleBrandsNodeState extends State<_VehicleBrandsNode> {
                           message: 'Markayı sil',
                           child: InkWell(
                             onTap: () => _deleteBrand(brand),
-                            child: const Icon(Icons.delete_outline, size: 13, color: Colors.red),
+                            child: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
                           ),
                         ),
                       ],
@@ -558,7 +578,7 @@ class _VehicleBrandsNodeState extends State<_VehicleBrandsNode> {
                                 message: 'Modeli sil',
                                 child: InkWell(
                                   onTap: () => _deleteModel(brand, model),
-                                  child: const Icon(Icons.close, size: 12, color: Colors.red),
+                                  child: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
                                 ),
                               ),
                             ],
@@ -792,7 +812,7 @@ class _CategoryRowState extends State<_CategoryRow> {
                       message: 'Alt kategori ekle',
                       child: IconButton(
                         icon: const Icon(Icons.add_circle_outline,
-                            size: 15, color: Color(0xFF1A4F9C)),
+                            size: 20, color: Color(0xFF1A4F9C)),
                         onPressed: widget.onAddChild,
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
@@ -802,7 +822,7 @@ class _CategoryRowState extends State<_CategoryRow> {
                     const SizedBox(width: 2),
                     IconButton(
                       icon: const Icon(Icons.edit_outlined,
-                          size: 15, color: Color(0xFF8899AA)),
+                          size: 20, color: Color(0xFF8899AA)),
                       onPressed: () => setState(() => _editing = true),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -811,7 +831,7 @@ class _CategoryRowState extends State<_CategoryRow> {
                     const SizedBox(width: 2),
                     IconButton(
                       icon: const Icon(Icons.delete_outline,
-                          size: 15, color: Colors.red),
+                          size: 20, color: Colors.red),
                       onPressed: () async {
                         final ok = await showDialog<bool>(
                           context: context,
@@ -879,331 +899,281 @@ class _VehicleDataTab extends StatefulWidget {
 
 class _VehicleDataTabState extends State<_VehicleDataTab> {
   final _db = FirebaseFirestore.instance;
-  String _selectedDoc = 'brands_by_subcat';
-  String? _selectedKey;
-  final _textCtrl = TextEditingController();
-  bool _saving = false;
 
-  static const _docs = [
-    ('brands_by_subcat', 'Markalar (alt kategori → markalar)'),
-    ('models_by_brand', 'Modeller (marka → modeller)'),
-    ('engines_by_model', 'Motorlar (model → motorlar)'),
+  // Seçili kategori → marka → model
+  String _selectedCat = 'otomobil';
+  String? _selectedBrandId;
+  String? _selectedModelId;
+
+  static const _catCollectionMap = <String, String>{
+    'arazi_suv': 'arazi_suv_brands',
+    'motosiklet': 'motosiklet_brands',
+  };
+
+  static const _cats = [
+    ('otomobil', 'Otomobil'),
+    ('arazi_suv', 'Arazi & SUV'),
+    ('motosiklet', 'Motosiklet'),
   ];
+
+  String get _brandsCol => _catCollectionMap[_selectedCat] ?? 'vehicle_brands';
+
+  Query<Map<String, dynamic>> get _brandsQuery {
+    final col = _brandsCol;
+    if (col == 'vehicle_brands') {
+      return _db.collection('vehicle_brands')
+          .where('categoryIds', arrayContains: _selectedCat)
+          .orderBy('sortOrder');
+    }
+    return _db.collection(col).orderBy('sortOrder');
+  }
 
   @override
   void dispose() {
-    _textCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _save(Map<String, dynamic> currentData) async {
-    if (_selectedKey == null) return;
-    setState(() => _saving = true);
-    final list = _textCtrl.text
-        .split(',')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
-    final updated = Map<String, dynamic>.from(currentData)..[_selectedKey!] = list;
-    await _db
-        .collection('vehicle_data')
-        .doc(_selectedDoc)
-        .set({'data': updated});
-    if (mounted) setState(() => _saving = false);
-  }
-
-  Future<void> _addKey(Map<String, dynamic> currentData) async {
-    final ctrl = TextEditingController();
-    final key = await showDialog<String>(
+  Future<bool> _confirmDel(String msg) async {
+    final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Yeni Anahtar'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(hintText: 'anahtar_id'),
-          autofocus: true,
-        ),
+        title: const Text('Emin misin?'),
+        content: Text(msg),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('İptal')),
-          TextButton(
-              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-              child: const Text('Ekle')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('İptal')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sil', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<String?> _prompt(String title, String hint) async {
+    final ctrl = TextEditingController();
+    final val = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(title),
+        content: TextField(controller: ctrl, decoration: InputDecoration(hintText: hint), autofocus: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('İptal')),
+          TextButton(onPressed: () => Navigator.pop(context, ctrl.text.trim()), child: const Text('Ekle')),
         ],
       ),
     );
     ctrl.dispose();
-    if (key == null || key.isEmpty) return;
-    final updated = Map<String, dynamic>.from(currentData)..[key] = <String>[];
-    await _db
-        .collection('vehicle_data')
-        .doc(_selectedDoc)
-        .set({'data': updated});
-    setState(() => _selectedKey = key);
-    _textCtrl.clear();
-  }
-
-  Future<void> _deleteKey(Map<String, dynamic> currentData) async {
-    if (_selectedKey == null) return;
-    final updated = Map<String, dynamic>.from(currentData)..remove(_selectedKey);
-    await _db
-        .collection('vehicle_data')
-        .doc(_selectedDoc)
-        .set({'data': updated});
-    setState(() { _selectedKey = null; _textCtrl.clear(); });
+    return (val == null || val.isEmpty) ? null : val;
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: _db
-          .collection('vehicle_data')
-          .doc(_selectedDoc)
-          .snapshots(),
-      builder: (context, snap) {
-        final raw = snap.hasData && snap.data!.exists
-            ? ((snap.data!.data() as Map<String, dynamic>?)?['data']
-                    as Map<String, dynamic>?) ??
-                {}
-            : <String, dynamic>{};
-
-        final keys = raw.keys.toList()..sort();
-
-        if (_selectedKey != null &&
-            !keys.contains(_selectedKey) &&
-            keys.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _selectedKey = null);
-          });
-        }
-
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Doc selector
-              Row(
-                children: _docs.map((pair) {
-                  final selected = _selectedDoc == pair.$1;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(pair.$2,
-                          style: TextStyle(
-                              fontSize: 12,
-                              color: selected
-                                  ? Colors.white
-                                  : const Color(0xFF1A2035))),
-                      selected: selected,
-                      selectedColor: const Color(0xFF1A4F9C),
-                      onSelected: (_) => setState(() {
-                        _selectedDoc = pair.$1;
-                        _selectedKey = null;
-                        _textCtrl.clear();
-                      }),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Key list
-                    Container(
-                      width: 260,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFE8ECF0)),
-                      ),
-                      child: Column(
-                        children: [
-                          Padding(
-                            padding:
-                                const EdgeInsets.fromLTRB(12, 10, 8, 10),
-                            child: Row(
-                              children: [
-                                const Text('Anahtarlar',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF1A2035))),
-                                const Spacer(),
-                                TextButton.icon(
-                                  onPressed: () => _addKey(raw),
-                                  icon: const Icon(Icons.add, size: 14),
-                                  label: const Text('Ekle',
-                                      style: TextStyle(fontSize: 12)),
-                                  style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8)),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Divider(height: 1, color: Color(0xFFE8ECF0)),
-                          Expanded(
-                            child: !snap.hasData
-                                ? const Center(
-                                    child: CircularProgressIndicator())
-                                : ListView.builder(
-                                    itemCount: keys.length,
-                                    itemBuilder: (_, i) {
-                                      final k = keys[i];
-                                      final sel = _selectedKey == k;
-                                      return ListTile(
-                                        dense: true,
-                                        selected: sel,
-                                        selectedTileColor: const Color(
-                                                0xFF1A4F9C)
-                                            .withValues(alpha: 0.06),
-                                        title: Text(k,
-                                            style: TextStyle(
-                                                fontSize: 12,
-                                                color: sel
-                                                    ? const Color(0xFF1A4F9C)
-                                                    : const Color(
-                                                        0xFF1A2035))),
-                                        onTap: () {
-                                          final vals =
-                                              (raw[k] as List?)
-                                                      ?.cast<String>() ??
-                                                  [];
-                                          setState(() {
-                                            _selectedKey = k;
-                                            _textCtrl.text =
-                                                vals.join(', ');
-                                          });
-                                        },
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Editor
-                    Expanded(
-                      child: _selectedKey == null
-                          ? const Center(
-                              child: Text('Bir anahtar seçin',
-                                  style: TextStyle(
-                                      color: Color(0xFF8899AA))))
-                          : Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                    color: const Color(0xFFE8ECF0)),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(_selectedKey!,
-                                          style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF1A2035))),
-                                      const Spacer(),
-                                      TextButton.icon(
-                                        onPressed: () => _deleteKey(raw),
-                                        icon: const Icon(
-                                            Icons.delete_outline,
-                                            size: 14,
-                                            color: Colors.red),
-                                        label: const Text('Sil',
-                                            style: TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.red)),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  const Text(
-                                      'Değerleri virgülle ayırarak girin:',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF8899AA))),
-                                  const SizedBox(height: 8),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _textCtrl,
-                                      maxLines: null,
-                                      expands: true,
-                                      style: const TextStyle(fontSize: 13),
-                                      decoration: InputDecoration(
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          borderSide: const BorderSide(
-                                              color: Color(0xFFDDE2EA)),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          borderSide: const BorderSide(
-                                              color: Color(0xFFDDE2EA)),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                          borderSide: const BorderSide(
-                                              color: Color(0xFF1A4F9C),
-                                              width: 1.5),
-                                        ),
-                                        contentPadding:
-                                            const EdgeInsets.all(12),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: ElevatedButton(
-                                      onPressed:
-                                          _saving ? null : () => _save(raw),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            const Color(0xFF1A4F9C),
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 24, vertical: 12),
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(8)),
-                                      ),
-                                      child: _saving
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child:
-                                                  CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                      color: Colors.white))
-                                          : const Text('Kaydet',
-                                              style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 14)),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                    ),
-                  ],
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Kategori seçici
+          Row(
+            children: _cats.map((pair) {
+              final sel = _selectedCat == pair.$1;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(pair.$2, style: TextStyle(fontSize: 12, color: sel ? Colors.white : const Color(0xFF1A2035))),
+                  selected: sel,
+                  selectedColor: const Color(0xFF1A4F9C),
+                  onSelected: (_) => setState(() { _selectedCat = pair.$1; _selectedBrandId = null; _selectedModelId = null; }),
                 ),
-              ),
-            ],
+              );
+            }).toList(),
           ),
-        );
-      },
+          const SizedBox(height: 12),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Marka listesi
+                _Panel(
+                  title: 'Markalar',
+                  onAdd: () async {
+                    final name = await _prompt('Marka Ekle', 'Marka adı');
+                    if (name == null) return;
+                    final col = _brandsCol;
+                    final docId = name.toLowerCase().replaceAll(' ', '_').replaceAll('-', '_');
+                    final data = <String, dynamic>{'id': docId, 'name': name, 'sortOrder': 999};
+                    if (col == 'vehicle_brands') data['categoryIds'] = [_selectedCat];
+                    await _db.collection(col).doc(docId).set(data);
+                  },
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: _brandsQuery.snapshots(),
+                    builder: (_, snap) {
+                      if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                      final docs = snap.data!.docs;
+                      return ListView.builder(
+                        itemCount: docs.length,
+                        itemBuilder: (_, i) {
+                          final d = docs[i];
+                          final name = (d.data() as Map)['name'] as String? ?? d.id;
+                          final sel = _selectedBrandId == d.id;
+                          return ListTile(
+                            dense: true, selected: sel,
+                            selectedTileColor: const Color(0xFF1A4F9C).withValues(alpha: 0.07),
+                            title: Text(name, style: TextStyle(fontSize: 12, color: sel ? const Color(0xFF1A4F9C) : const Color(0xFF1A2035))),
+                            onTap: () => setState(() { _selectedBrandId = d.id; _selectedModelId = null; }),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                              padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                              onPressed: () async {
+                                if (!await _confirmDel('"$name" markası silinsin mi?')) return;
+                                final models = await _db.collection(_brandsCol).doc(d.id).collection('models').get();
+                                final batch = _db.batch();
+                                for (final m in models.docs) { batch.delete(m.reference); }
+                                batch.delete(_db.collection(_brandsCol).doc(d.id));
+                                await batch.commit();
+                                if (_selectedBrandId == d.id) setState(() { _selectedBrandId = null; _selectedModelId = null; });
+                              },
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Model listesi
+                if (_selectedBrandId != null)
+                  _Panel(
+                    title: 'Modeller',
+                    onAdd: () async {
+                      final name = await _prompt('Model Ekle', 'Model adı');
+                      if (name == null) return;
+                      final docId = name.toLowerCase().replaceAll(' ', '_').replaceAll('-', '_');
+                      final col = _db.collection(_brandsCol).doc(_selectedBrandId!).collection('models');
+                      final count = (await col.get()).docs.length;
+                      await col.doc(docId).set({'id': docId, 'name': name, 'sortOrder': count});
+                    },
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: _db.collection(_brandsCol).doc(_selectedBrandId!).collection('models').orderBy('sortOrder').snapshots(),
+                      builder: (_, snap) {
+                        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                        final docs = snap.data!.docs;
+                        return ListView.builder(
+                          itemCount: docs.length,
+                          itemBuilder: (_, i) {
+                            final d = docs[i];
+                            final name = (d.data() as Map)['name'] as String? ?? d.id;
+                            final sel = _selectedModelId == d.id;
+                            return ListTile(
+                              dense: true, selected: sel,
+                              selectedTileColor: const Color(0xFF1A4F9C).withValues(alpha: 0.07),
+                              title: Text(name, style: TextStyle(fontSize: 12, color: sel ? const Color(0xFF1A4F9C) : const Color(0xFF1A2035))),
+                              onTap: () => setState(() => _selectedModelId = d.id),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                                onPressed: () async {
+                                  if (!await _confirmDel('"$name" modeli silinsin mi?')) return;
+                                  await _db.collection(_brandsCol).doc(_selectedBrandId!).collection('models').doc(d.id).delete();
+                                  if (_selectedModelId == d.id) setState(() => _selectedModelId = null);
+                                },
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                if (_selectedBrandId == null)
+                  const Expanded(child: Center(child: Text('Bir marka seçin', style: TextStyle(color: Color(0xFF8899AA))))),
+                const SizedBox(width: 12),
+                // Motor listesi
+                if (_selectedModelId != null)
+                  _Panel(
+                    title: 'Motorlar',
+                    onAdd: () async {
+                      final name = await _prompt('Motor Ekle', 'Motor adı (örn: 2.0 TDI 150HP)');
+                      if (name == null) return;
+                      final docId = name.toLowerCase().replaceAll(' ', '_').replaceAll('-', '_');
+                      final col = _db.collection(_brandsCol).doc(_selectedBrandId!).collection('models').doc(_selectedModelId!).collection('engines');
+                      final count = (await col.get()).docs.length;
+                      await col.doc(docId).set({'id': docId, 'name': name, 'sortOrder': count});
+                    },
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: _db.collection(_brandsCol).doc(_selectedBrandId!).collection('models').doc(_selectedModelId!).collection('engines').orderBy('sortOrder').snapshots(),
+                      builder: (_, snap) {
+                        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+                        final docs = snap.data!.docs;
+                        if (docs.isEmpty) return const Center(child: Text('Motor yok', style: TextStyle(color: Color(0xFF8899AA), fontSize: 12)));
+                        return ListView.builder(
+                          itemCount: docs.length,
+                          itemBuilder: (_, i) {
+                            final d = docs[i];
+                            final name = (d.data() as Map)['name'] as String? ?? d.id;
+                            return ListTile(
+                              dense: true,
+                              title: Text(name, style: const TextStyle(fontSize: 12, color: Color(0xFF1A2035))),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                padding: EdgeInsets.zero, constraints: const BoxConstraints(),
+                                onPressed: () async {
+                                  if (!await _confirmDel('"$name" motoru silinsin mi?')) return;
+                                  await d.reference.delete();
+                                },
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                if (_selectedModelId == null && _selectedBrandId != null)
+                  const Expanded(child: Center(child: Text('Bir model seçin', style: TextStyle(color: Color(0xFF8899AA))))),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Panel extends StatelessWidget {
+  final String title;
+  final VoidCallback onAdd;
+  final Widget child;
+  const _Panel({required this.title, required this.onAdd, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE8ECF0)),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+              child: Row(
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A2035))),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: onAdd,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Ekle', style: TextStyle(fontSize: 12)),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Color(0xFFE8ECF0)),
+            Expanded(child: child),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1259,7 +1229,7 @@ class _SchemasTabState extends State<_SchemasTab> {
                       selectedTileColor: _primary.withValues(alpha: 0.07),
                       title: Text(id, style: TextStyle(fontSize: 12, color: sel ? _primary : const Color(0xFF1A2035))),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 14, color: Colors.red),
+                        icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
                         onPressed: () => _deleteSchema(id),
                         padding: EdgeInsets.zero, constraints: const BoxConstraints(),
                       ),
@@ -1332,7 +1302,7 @@ class _SchemasTabState extends State<_SchemasTab> {
                                       style: TextStyle(fontSize: 12, color: selF ? _primary : const Color(0xFF1A2035))),
                                   subtitle: Text(field['type'] as String? ?? '', style: const TextStyle(fontSize: 10, color: Color(0xFF8899AA))),
                                   trailing: IconButton(
-                                    icon: const Icon(Icons.delete_outline, size: 13, color: Colors.red),
+                                    icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
                                     onPressed: () => _deleteField(sections, si, fi),
                                     padding: EdgeInsets.zero, constraints: const BoxConstraints(),
                                   ),
@@ -1408,7 +1378,7 @@ class _SchemasTabState extends State<_SchemasTab> {
     return Tooltip(
       message: tooltip,
       child: IconButton(
-        icon: Icon(icon, size: 15, color: color ?? _primary),
+        icon: Icon(icon, size: 20, color: color ?? _primary),
         onPressed: onTap,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(),
@@ -1491,6 +1461,19 @@ class _SchemasTabState extends State<_SchemasTab> {
   }
 
   Future<void> _deleteSection(List<Map<String, dynamic>> sections, int idx) async {
+    final title = sections[idx]['title'] as String? ?? 'Bu bölüm';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Emin misin?'),
+        content: Text('"$title" bölümü silinsin mi?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('İptal')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sil', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+    if (ok != true) return;
     final updated = List<Map<String, dynamic>>.from(sections)..removeAt(idx);
     await _db.collection('listing_field_schemas').doc(_selectedSchemaId).update({'sections': updated});
     setState(() { _selectedSectionIdx = null; _selectedFieldIdx = null; });
@@ -1515,6 +1498,19 @@ class _SchemasTabState extends State<_SchemasTab> {
   }
 
   Future<void> _deleteField(List<Map<String, dynamic>> sections, int si, int fi) async {
+    final fieldLabel = ((sections[si]['fields'] as List? ?? [])[fi] as Map)['label'] as String? ?? 'Bu alan';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Emin misin?'),
+        content: Text('"$fieldLabel" alanı silinsin mi?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('İptal')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sil', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
+    if (ok != true) return;
     final section = Map<String, dynamic>.from(sections[si]);
     final fields = List<Map<String, dynamic>>.from((section['fields'] as List? ?? []).cast<Map<String, dynamic>>())..removeAt(fi);
     section['fields'] = fields;
