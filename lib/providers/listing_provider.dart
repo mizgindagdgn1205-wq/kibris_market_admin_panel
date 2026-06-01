@@ -118,6 +118,9 @@ class ListingProvider extends ChangeNotifier {
 
   Future<void> toggleFeatured(String id) async {
     final listing = _allListings.firstWhere((l) => l.id == id);
+    if (listing.status != ListingStatus.active) {
+      throw Exception('Yalnızca onaylı ilanlar öne çıkarılabilir.');
+    }
     await _db.collection('listings').doc(id).update({'isFeatured': !listing.isFeatured});
   }
 

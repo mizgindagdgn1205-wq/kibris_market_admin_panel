@@ -5,13 +5,14 @@ import '../providers/listing_provider.dart';
 import '../models/listing.dart';
 import '../theme/app_theme.dart';
 import 'web_admin_categories.dart';
+import 'web_admin_costs.dart';
 import 'web_admin_dashboard.dart';
 import 'web_admin_listings.dart';
 import 'web_admin_messages.dart';
 import 'web_admin_reports.dart';
 import 'web_admin_users.dart';
 
-enum AdminSection { dashboard, pendingListings, allListings, users, messages, reports, categories }
+enum AdminSection { dashboard, pendingListings, allListings, users, messages, reports, categories, costs }
 
 class WebAdminShell extends StatefulWidget {
   const WebAdminShell({super.key});
@@ -24,13 +25,14 @@ class _WebAdminShellState extends State<WebAdminShell> {
   AdminSection _section = AdminSection.dashboard;
 
   static const _navItems = [
-    _NavItem(AdminSection.dashboard,       Icons.dashboard_outlined,       Icons.dashboard,          'Dashboard'),
+    _NavItem(AdminSection.dashboard,       Icons.dashboard_outlined,        Icons.dashboard,          'Dashboard'),
     _NavItem(AdminSection.pendingListings, Icons.pending_actions_outlined,  Icons.pending_actions,    'Onay Bekleyen'),
     _NavItem(AdminSection.allListings,     Icons.list_alt_outlined,         Icons.list_alt,           'Tüm İlanlar'),
     _NavItem(AdminSection.users,           Icons.people_outline,            Icons.people,             'Kullanıcılar'),
     _NavItem(AdminSection.messages,        Icons.chat_bubble_outline,       Icons.chat_bubble,        'Mesajlar'),
     _NavItem(AdminSection.reports,         Icons.bar_chart_outlined,        Icons.bar_chart,          'Raporlar'),
-    _NavItem(AdminSection.categories,      Icons.category_outlined,          Icons.category,           'Kategoriler'),
+    _NavItem(AdminSection.categories,      Icons.category_outlined,         Icons.category,           'Kategoriler'),
+    _NavItem(AdminSection.costs,           Icons.receipt_long_outlined,     Icons.receipt_long,       'Giderler'),
   ];
 
   @override
@@ -73,6 +75,7 @@ class _WebAdminShellState extends State<WebAdminShell> {
       AdminSection.messages        => const WebAdminMessages(),
       AdminSection.reports         => const WebAdminReports(),
       AdminSection.categories      => const WebAdminCategories(),
+      AdminSection.costs           => const WebAdminCosts(),
     };
   }
 }
@@ -229,6 +232,7 @@ class _AdminTopBar extends StatelessWidget {
     AdminSection.messages:        'Mesajlar',
     AdminSection.reports:         'Raporlar',
     AdminSection.categories:      'Kategori Yönetimi',
+    AdminSection.costs:           'Yapay Zeka Giderleri',
   };
 
   @override

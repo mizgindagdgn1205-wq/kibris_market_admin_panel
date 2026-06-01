@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-class _Msg {
+// ── Firestore modelleri ────────────────────────────────────────────────────────
+
+class _ChatMsg {
   final String id;
   final String senderId;
   final String senderName;
@@ -9,7 +13,7 @@ class _Msg {
   final DateTime sentAt;
   final bool isAdmin;
 
-  const _Msg({
+  const _ChatMsg({
     required this.id,
     required this.senderId,
     required this.senderName,
@@ -17,86 +21,82 @@ class _Msg {
     required this.sentAt,
     this.isAdmin = false,
   });
+
+  factory _ChatMsg.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return _ChatMsg(
+      id: doc.id,
+      senderId: d['senderId'] as String? ?? '',
+      senderName: d['senderName'] as String? ?? '',
+      text: d['text'] as String? ?? '',
+      sentAt: (d['sentAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      isAdmin: d['isAdmin'] as bool? ?? false,
+    );
+  }
 }
 
-class _Conversation {
-  final String id;
-  final String participantA;
-  final String participantB;
-  final List<_Msg> messages;
-  final bool isAdminChat;
+class _SupportChat {
+  final String id; // = userId
+  final String userName;
+  final String lastMessage;
+  final DateTime? lastMessageTime;
+  final bool unreadByAdmin;
 
-  const _Conversation({
+  const _SupportChat({
     required this.id,
-    required this.participantA,
-    required this.participantB,
-    required this.messages,
-    this.isAdminChat = false,
+    required this.userName,
+    required this.lastMessage,
+    this.lastMessageTime,
+    this.unreadByAdmin = false,
   });
 
-  String get lastMessage => messages.isNotEmpty ? messages.last.text : '';
-  DateTime? get lastTime => messages.isNotEmpty ? messages.last.sentAt : null;
+  factory _SupportChat.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return _SupportChat(
+      id: doc.id,
+      userName: d['userName'] as String? ?? 'Kullanıcı',
+      lastMessage: d['lastMessage'] as String? ?? '',
+      lastMessageTime: (d['lastMessageTime'] as Timestamp?)?.toDate(),
+      unreadByAdmin: d['unreadByAdmin'] as bool? ?? false,
+    );
+  }
 }
 
-final _kConversations = [
-  _Conversation(
-    id: 'conv_admin_1',
-    participantA: 'Admin',
-    participantB: 'Ali Yılmaz',
-    isAdminChat: true,
-    messages: [
-      _Msg(id: 'm1', senderId: 'user1', senderName: 'Ali Yılmaz',
-          text: 'Merhaba, ilanım neden onaylanmadı?',
-          sentAt: DateTime.now().subtract(const Duration(hours: 2))),
-      _Msg(id: 'm2', senderId: 'admin', senderName: 'Admin', isAdmin: true,
-          text: 'Merhaba Ali Bey, ilanınızda fiyat bilgisi eksik. Lütfen güncelleyin.',
-          sentAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 45))),
-      _Msg(id: 'm3', senderId: 'user1', senderName: 'Ali Yılmaz',
-          text: 'Tamam, şimdi güncelledim teşekkürler.',
-          sentAt: DateTime.now().subtract(const Duration(hours: 1, minutes: 30))),
-    ],
-  ),
-  _Conversation(
-    id: 'conv_admin_2',
-    participantA: 'Admin',
-    participantB: 'Fatma Kaya',
-    isAdminChat: true,
-    messages: [
-      _Msg(id: 'm4', senderId: 'user3', senderName: 'Fatma Kaya',
-          text: 'İlanımı premium yapabilir misiniz?',
-          sentAt: DateTime.now().subtract(const Duration(hours: 5))),
-    ],
-  ),
-  _Conversation(
-    id: 'conv_users_1',
-    participantA: 'Mehmet Demir',
-    participantB: 'Ayşe Şahin',
-    messages: [
-      _Msg(id: 'm5', senderId: 'user2', senderName: 'Mehmet Demir',
-          text: 'Merhaba, araba hâlâ satılık mı?',
-          sentAt: DateTime.now().subtract(const Duration(hours: 3))),
-      _Msg(id: 'm6', senderId: 'user4', senderName: 'Ayşe Şahin',
-          text: 'Evet, hâlâ satılık. Görüşmek ister misiniz?',
-          sentAt: DateTime.now().subtract(const Duration(hours: 2, minutes: 50))),
-      _Msg(id: 'm7', senderId: 'user2', senderName: 'Mehmet Demir',
-          text: 'Evet, hafta sonu müsait misiniz?',
-          sentAt: DateTime.now().subtract(const Duration(hours: 2, minutes: 40))),
-    ],
-  ),
-  _Conversation(
-    id: 'conv_users_2',
-    participantA: 'Hasan Arslan',
-    participantB: 'Zeynep Çelik',
-    messages: [
-      _Msg(id: 'm8', senderId: 'user5', senderName: 'Hasan Arslan',
-          text: 'Mobilyalar ne zaman teslim edilebilir?',
-          sentAt: DateTime.now().subtract(const Duration(days: 1))),
-      _Msg(id: 'm9', senderId: 'user6', senderName: 'Zeynep Çelik',
-          text: 'Yarın öğleden sonra uygun.',
-          sentAt: DateTime.now().subtract(const Duration(hours: 20))),
-    ],
-  ),
-];
+class _UserChat {
+  final String id;
+  final List<String> participantIds;
+  final Map<String, String> participantNames;
+  final String listingTitle;
+  final String lastMessage;
+  final DateTime? lastMessageTime;
+
+  const _UserChat({
+    required this.id,
+    required this.participantIds,
+    required this.participantNames,
+    required this.listingTitle,
+    required this.lastMessage,
+    this.lastMessageTime,
+  });
+
+  factory _UserChat.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>;
+    return _UserChat(
+      id: doc.id,
+      participantIds: List<String>.from(d['participantIds'] ?? []),
+      participantNames: Map<String, String>.from(
+        (d['participantNames'] as Map?)?.map((k, v) => MapEntry(k.toString(), v.toString())) ?? {},
+      ),
+      listingTitle: d['listingTitle'] as String? ?? '',
+      lastMessage: d['lastMessage'] as String? ?? '',
+      lastMessageTime: (d['lastMessageTime'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  String get participantLabel => participantNames.values.join(' & ');
+}
+
+// ── Ana ekran ─────────────────────────────────────────────────────────────────
 
 class WebAdminMessages extends StatefulWidget {
   const WebAdminMessages({super.key});
@@ -106,17 +106,23 @@ class WebAdminMessages extends StatefulWidget {
 }
 
 class _WebAdminMessagesState extends State<WebAdminMessages> with SingleTickerProviderStateMixin {
+  final _db = FirebaseFirestore.instance;
   late TabController _tab;
-  _Conversation? _selected;
+
+  _SupportChat? _selectedSupport;
+  _UserChat? _selectedUserChat;
+
   final _replyCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
-  final List<_Conversation> _conversations = List.from(_kConversations);
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
-    _tab.addListener(() => setState(() => _selected = null));
+    _tab.addListener(() => setState(() {
+          _selectedSupport = null;
+          _selectedUserChat = null;
+        }));
   }
 
   @override
@@ -127,120 +133,57 @@ class _WebAdminMessagesState extends State<WebAdminMessages> with SingleTickerPr
     super.dispose();
   }
 
-  List<_Conversation> get _adminChats =>
-      _conversations.where((c) => c.isAdminChat).toList();
-  List<_Conversation> get _userChats =>
-      _conversations.where((c) => !c.isAdminChat).toList();
+  // ── Firestore streams ──────────────────────────────────────────────────────
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Left: conversation list
-        SizedBox(
-          width: 320,
-          child: Column(
-            children: [
-              // Tab bar
-              Container(
-                color: Colors.white,
-                child: TabBar(
-                  controller: _tab,
-                  labelColor: AppColors.primary,
-                  unselectedLabelColor: AppColors.textSecondary,
-                  indicatorColor: AppColors.primary,
-                  tabs: [
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('Kullanıcı-Admin'),
-                          const SizedBox(width: 6),
-                          if (_adminChats.isNotEmpty)
-                            _CountBadge(count: _adminChats.length),
-                        ],
-                      ),
-                    ),
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('Kullanıcılar Arası'),
-                          const SizedBox(width: 6),
-                          if (_userChats.isNotEmpty)
-                            _CountBadge(count: _userChats.length),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1, color: AppColors.divider),
-              Expanded(
-                child: TabBarView(
-                  controller: _tab,
-                  children: [
-                    _ConversationList(
-                      convs: _adminChats,
-                      selected: _selected,
-                      onSelect: (c) => setState(() => _selected = c),
-                    ),
-                    _ConversationList(
-                      convs: _userChats,
-                      selected: _selected,
-                      onSelect: (c) => setState(() => _selected = c),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const VerticalDivider(width: 1, color: AppColors.divider),
-        // Right: chat window
-        Expanded(
-          child: _selected == null
-              ? const _EmptyChat()
-              : _ChatWindow(
-                  conversation: _selected!,
-                  replyCtrl: _replyCtrl,
-                  scrollCtrl: _scrollCtrl,
-                  isAdminMode: _selected!.isAdminChat,
-                  onSend: _sendReply,
-                ),
-        ),
-      ],
-    );
-  }
+  Stream<List<_SupportChat>> get _supportStream => _db
+      .collection('support')
+      .orderBy('lastMessageTime', descending: true)
+      .snapshots()
+      .map((s) => s.docs.map(_SupportChat.fromDoc).toList());
 
-  void _sendReply(String text) {
-    if (text.trim().isEmpty) return;
-    final conv = _selected!;
-    final idx = _conversations.indexWhere((c) => c.id == conv.id);
-    if (idx == -1) return;
+  Stream<List<_ChatMsg>> supportMessages(String userId) => _db
+      .collection('support')
+      .doc(userId)
+      .collection('messages')
+      .orderBy('sentAt')
+      .snapshots()
+      .map((s) => s.docs.map(_ChatMsg.fromDoc).toList());
 
-    final updated = _Conversation(
-      id: conv.id,
-      participantA: conv.participantA,
-      participantB: conv.participantB,
-      isAdminChat: conv.isAdminChat,
-      messages: [
-        ...conv.messages,
-        _Msg(
-          id: 'reply_${DateTime.now().millisecondsSinceEpoch}',
-          senderId: 'admin',
-          senderName: 'Admin',
-          text: text.trim(),
-          sentAt: DateTime.now(),
-          isAdmin: true,
-        ),
-      ],
-    );
+  Stream<List<_UserChat>> get _userChatsStream => _db
+      .collection('chats')
+      .orderBy('lastMessageTime', descending: true)
+      .snapshots()
+      .map((s) => s.docs.map(_UserChat.fromDoc).toList());
 
-    setState(() {
-      _conversations[idx] = updated;
-      _selected = updated;
+  Stream<List<_ChatMsg>> userChatMessages(String chatId) => _db
+      .collection('chats')
+      .doc(chatId)
+      .collection('messages')
+      .orderBy('sentAt')
+      .snapshots()
+      .map((s) => s.docs.map(_ChatMsg.fromDoc).toList());
+
+  // ── Admin yanıt gönder (sadece support) ───────────────────────────────────
+
+  Future<void> _sendAdminReply(String text) async {
+    if (text.trim().isEmpty || _selectedSupport == null) return;
+    final userId = _selectedSupport!.id;
+    final batch = _db.batch();
+    final msgRef = _db.collection('support').doc(userId).collection('messages').doc();
+    batch.set(msgRef, {
+      'senderId': 'admin',
+      'senderName': 'Admin',
+      'text': text.trim(),
+      'sentAt': FieldValue.serverTimestamp(),
+      'isAdmin': true,
     });
+    batch.update(_db.collection('support').doc(userId), {
+      'lastMessage': text.trim(),
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'unreadByAdmin': false,
+      'unreadByUser': true,
+    });
+    await batch.commit();
     _replyCtrl.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
@@ -252,69 +195,223 @@ class _WebAdminMessagesState extends State<WebAdminMessages> with SingleTickerPr
       }
     });
   }
-}
-
-class _ConversationList extends StatelessWidget {
-  final List<_Conversation> convs;
-  final _Conversation? selected;
-  final void Function(_Conversation) onSelect;
-
-  const _ConversationList({required this.convs, required this.selected, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
-    if (convs.isEmpty) {
-      return const Center(
-        child: Text('Konuşma yok', style: TextStyle(color: AppColors.textLight)),
+    return Row(
+      children: [
+        // Sol: konuşma listesi
+        SizedBox(
+          width: 320,
+          child: Column(
+            children: [
+              Container(
+                color: Colors.white,
+                child: TabBar(
+                  controller: _tab,
+                  labelColor: AppColors.primary,
+                  unselectedLabelColor: AppColors.textSecondary,
+                  indicatorColor: AppColors.primary,
+                  tabs: const [
+                    Tab(text: 'Destek Talepleri'),
+                    Tab(text: 'Kullanıcılar Arası'),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: AppColors.divider),
+              Expanded(
+                child: TabBarView(
+                  controller: _tab,
+                  children: [
+                    // Tab 1: Support
+                    StreamBuilder<List<_SupportChat>>(
+                      stream: _supportStream,
+                      builder: (context, snap) {
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (snap.hasError) {
+                          return Center(child: Text('Hata: ${snap.error}', style: const TextStyle(color: Colors.red)));
+                        }
+                        final list = snap.data ?? [];
+                        if (list.isEmpty) {
+                          return const Center(
+                            child: Text('Destek talebi yok', style: TextStyle(color: AppColors.textLight)),
+                          );
+                        }
+                        return ListView.separated(
+                          itemCount: list.length,
+                          separatorBuilder: (_, i) => const Divider(height: 1, color: AppColors.divider),
+                          itemBuilder: (_, i) {
+                            final c = list[i];
+                            final isSelected = _selectedSupport?.id == c.id;
+                            return InkWell(
+                              onTap: () => setState(() => _selectedSupport = c),
+                              child: Container(
+                                color: isSelected ? AppColors.primary.withValues(alpha: 0.07) : Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                child: Row(
+                                  children: [
+                                    Stack(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 20,
+                                          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                                          child: Text(
+                                            c.userName.isNotEmpty ? c.userName[0].toUpperCase() : '?',
+                                            style: const TextStyle(
+                                                fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
+                                          ),
+                                        ),
+                                        if (c.unreadByAdmin)
+                                          Positioned(
+                                            right: 0,
+                                            top: 0,
+                                            child: Container(
+                                              width: 10,
+                                              height: 10,
+                                              decoration: const BoxDecoration(
+                                                color: Colors.red,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(c.userName,
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: c.unreadByAdmin ? FontWeight.bold : FontWeight.w600,
+                                                  color: AppColors.textPrimary),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis),
+                                          const SizedBox(height: 2),
+                                          Text(c.lastMessage,
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: c.unreadByAdmin ? AppColors.textPrimary : AppColors.textLight,
+                                                  fontWeight: c.unreadByAdmin ? FontWeight.w500 : FontWeight.normal),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis),
+                                        ],
+                                      ),
+                                    ),
+                                    if (c.lastMessageTime != null)
+                                      Text(_timeLabel(c.lastMessageTime!),
+                                          style: const TextStyle(fontSize: 10, color: AppColors.textLight)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    // Tab 2: Kullanıcılar arası
+                    StreamBuilder<List<_UserChat>>(
+                      stream: _userChatsStream,
+                      builder: (context, snap) {
+                        if (snap.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (snap.hasError) {
+                          return Center(child: Text('Hata: ${snap.error}', style: const TextStyle(color: Colors.red)));
+                        }
+                        final list = snap.data ?? [];
+                        if (list.isEmpty) {
+                          return const Center(
+                            child: Text('Kullanıcı mesajı yok', style: TextStyle(color: AppColors.textLight)),
+                          );
+                        }
+                        return ListView.separated(
+                          itemCount: list.length,
+                          separatorBuilder: (_, i) => const Divider(height: 1, color: AppColors.divider),
+                          itemBuilder: (_, i) {
+                            final c = list[i];
+                            final isSelected = _selectedUserChat?.id == c.id;
+                            return InkWell(
+                              onTap: () => setState(() => _selectedUserChat = c),
+                              child: Container(
+                                color: isSelected ? AppColors.primary.withValues(alpha: 0.07) : Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 20,
+                                      backgroundColor: Colors.teal.withValues(alpha: 0.1),
+                                      child: const Icon(Icons.people, size: 18, color: Colors.teal),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(c.participantLabel,
+                                              style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppColors.textPrimary),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            c.listingTitle.isNotEmpty ? '📦 ${c.listingTitle}' : c.lastMessage,
+                                            style: const TextStyle(fontSize: 11, color: AppColors.textLight),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (c.lastMessageTime != null)
+                                      Text(_timeLabel(c.lastMessageTime!),
+                                          style: const TextStyle(fontSize: 10, color: AppColors.textLight)),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const VerticalDivider(width: 1, color: AppColors.divider),
+        // Sağ: mesaj paneli
+        Expanded(
+          child: _buildChatPanel(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChatPanel() {
+    if (_tab.index == 0) {
+      if (_selectedSupport == null) return const _EmptyChat();
+      return _SupportChatPanel(
+        chat: _selectedSupport!,
+        messagesStream: supportMessages(_selectedSupport!.id),
+        replyCtrl: _replyCtrl,
+        scrollCtrl: _scrollCtrl,
+        onSend: _sendAdminReply,
+      );
+    } else {
+      if (_selectedUserChat == null) return const _EmptyChat();
+      return _UserChatPanel(
+        chat: _selectedUserChat!,
+        messagesStream: userChatMessages(_selectedUserChat!.id),
+        scrollCtrl: _scrollCtrl,
       );
     }
-    return ListView.separated(
-      itemCount: convs.length,
-      separatorBuilder: (context, index) => const Divider(height: 1, color: AppColors.divider),
-      itemBuilder: (_, i) {
-        final c = convs[i];
-        final isSelected = selected?.id == c.id;
-        final other = c.isAdminChat ? c.participantB : '${c.participantA} & ${c.participantB}';
-        return InkWell(
-          onTap: () => onSelect(c),
-          child: Container(
-            color: isSelected ? AppColors.primary.withValues(alpha: 0.07) : Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: (c.isAdminChat ? AppColors.primary : Colors.teal).withValues(alpha: 0.1),
-                  child: Icon(
-                    c.isAdminChat ? Icons.support_agent : Icons.people,
-                    size: 18,
-                    color: c.isAdminChat ? AppColors.primary : Colors.teal,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(other,
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 2),
-                      Text(c.lastMessage,
-                          style: const TextStyle(fontSize: 11, color: AppColors.textLight),
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                ),
-                if (c.lastTime != null)
-                  Text(_timeLabel(c.lastTime!),
-                      style: const TextStyle(fontSize: 10, color: AppColors.textLight)),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   String _timeLabel(DateTime t) {
@@ -325,30 +422,28 @@ class _ConversationList extends StatelessWidget {
   }
 }
 
-class _ChatWindow extends StatelessWidget {
-  final _Conversation conversation;
+// ── Destek Chat Paneli ─────────────────────────────────────────────────────────
+
+class _SupportChatPanel extends StatelessWidget {
+  final _SupportChat chat;
+  final Stream<List<_ChatMsg>> messagesStream;
   final TextEditingController replyCtrl;
   final ScrollController scrollCtrl;
-  final bool isAdminMode;
-  final void Function(String) onSend;
+  final Future<void> Function(String) onSend;
 
-  const _ChatWindow({
-    required this.conversation,
+  const _SupportChatPanel({
+    required this.chat,
+    required this.messagesStream,
     required this.replyCtrl,
     required this.scrollCtrl,
-    required this.isAdminMode,
     required this.onSend,
   });
 
   @override
   Widget build(BuildContext context) {
-    final other = conversation.isAdminChat
-        ? conversation.participantB
-        : '${conversation.participantA} ↔ ${conversation.participantB}';
-
     return Column(
       children: [
-        // Chat header
+        // Header
         Container(
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -361,126 +456,234 @@ class _ChatWindow extends StatelessWidget {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                child: Icon(
-                  conversation.isAdminChat ? Icons.person : Icons.people,
-                  size: 16,
-                  color: AppColors.primary,
+                child: Text(
+                  chat.userName.isNotEmpty ? chat.userName[0].toUpperCase() : '?',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(other,
+                child: Text(chat.userName,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
               ),
-              if (!isAdminMode)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.visibility, size: 14, color: Colors.orange),
-                      SizedBox(width: 4),
-                      Text('İzleme Modu', style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w600)),
-                    ],
-                  ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
                 ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.support_agent, size: 14, color: AppColors.primary),
+                    SizedBox(width: 4),
+                    Text('Destek', style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
-        // Messages
+        // Mesajlar
         Expanded(
-          child: ListView.builder(
-            controller: scrollCtrl,
-            padding: const EdgeInsets.all(16),
-            itemCount: conversation.messages.length,
-            itemBuilder: (_, i) => _BubbleRow(
-              msg: conversation.messages[i],
-              isAdminMode: isAdminMode,
-            ),
+          child: StreamBuilder<List<_ChatMsg>>(
+            stream: messagesStream,
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final msgs = snap.data ?? [];
+              if (msgs.isEmpty) {
+                return const Center(
+                  child: Text('Henüz mesaj yok', style: TextStyle(color: AppColors.textLight)),
+                );
+              }
+              return ListView.builder(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.all(16),
+                itemCount: msgs.length,
+                itemBuilder: (_, i) => _BubbleRow(msg: msgs[i], isAdminMsg: msgs[i].isAdmin),
+              );
+            },
           ),
         ),
-        // Reply bar (only for admin chats)
-        if (isAdminMode)
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: AppColors.divider)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: replyCtrl,
-                    onSubmitted: onSend,
-                    decoration: InputDecoration(
-                      hintText: 'Mesaj yaz…',
-                      hintStyle: const TextStyle(fontSize: 13, color: AppColors.textLight),
-                      filled: true,
-                      fillColor: AppColors.background,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                InkWell(
-                  onTap: () => onSend(replyCtrl.text),
-                  borderRadius: BorderRadius.circular(24),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: const Icon(Icons.send, size: 18, color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          Container(
-            padding: const EdgeInsets.all(12),
+        // Yanıt kutusu
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: const BoxDecoration(
             color: Colors.white,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.visibility, size: 14, color: AppColors.textLight),
-                  SizedBox(width: 6),
-                  Text('Bu konuşmayı yalnızca izleyebilirsiniz',
-                      style: TextStyle(fontSize: 12, color: AppColors.textLight)),
-                ],
-              ),
-            ),
+            border: Border(top: BorderSide(color: AppColors.divider)),
           ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: replyCtrl,
+                  onSubmitted: onSend,
+                  decoration: InputDecoration(
+                    hintText: 'Kullanıcıya mesaj yaz…',
+                    hintStyle: const TextStyle(fontSize: 13, color: AppColors.textLight),
+                    filled: true,
+                    fillColor: AppColors.background,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () => onSend(replyCtrl.text),
+                borderRadius: BorderRadius.circular(24),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: const Icon(Icons.send, size: 18, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 }
 
-class _BubbleRow extends StatelessWidget {
-  final _Msg msg;
-  final bool isAdminMode;
+// ── Kullanıcılar Arası Chat Paneli (izleme) ───────────────────────────────────
 
-  const _BubbleRow({required this.msg, required this.isAdminMode});
+class _UserChatPanel extends StatelessWidget {
+  final _UserChat chat;
+  final Stream<List<_ChatMsg>> messagesStream;
+  final ScrollController scrollCtrl;
+
+  const _UserChatPanel({
+    required this.chat,
+    required this.messagesStream,
+    required this.scrollCtrl,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isMe = msg.isAdmin && isAdminMode;
+    return Column(
+      children: [
+        // Header
+        Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: AppColors.divider)),
+          ),
+          child: Row(
+            children: [
+              const CircleAvatar(
+                radius: 18,
+                backgroundColor: Color(0xFFE0F2F1),
+                child: Icon(Icons.people, size: 16, color: Colors.teal),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(chat.participantLabel,
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                    if (chat.listingTitle.isNotEmpty)
+                      Text(chat.listingTitle,
+                          style: const TextStyle(fontSize: 11, color: AppColors.textLight),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.visibility, size: 14, color: Colors.orange),
+                    SizedBox(width: 4),
+                    Text('İzleme Modu', style: TextStyle(fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Mesajlar
+        Expanded(
+          child: StreamBuilder<List<_ChatMsg>>(
+            stream: messagesStream,
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final msgs = snap.data ?? [];
+              if (msgs.isEmpty) {
+                return const Center(
+                  child: Text('Henüz mesaj yok', style: TextStyle(color: AppColors.textLight)),
+                );
+              }
+              return ListView.builder(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.all(16),
+                itemCount: msgs.length,
+                itemBuilder: (_, i) {
+                  final m = msgs[i];
+                  final isFirst = m.senderId == msgs[0].senderId;
+                  return _BubbleRow(msg: m, isAdminMsg: isFirst);
+                },
+              );
+            },
+          ),
+        ),
+        // Sadece izleme - yanıt yok
+        Container(
+          padding: const EdgeInsets.all(12),
+          color: Colors.white,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.visibility, size: 14, color: AppColors.textLight),
+                SizedBox(width: 6),
+                Text('Bu konuşmayı yalnızca izleyebilirsiniz',
+                    style: TextStyle(fontSize: 12, color: AppColors.textLight)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Mesaj balonu ──────────────────────────────────────────────────────────────
+
+class _BubbleRow extends StatelessWidget {
+  final _ChatMsg msg;
+  final bool isAdminMsg;
+
+  const _BubbleRow({required this.msg, required this.isAdminMsg});
+
+  @override
+  Widget build(BuildContext context) {
+    final isMe = msg.isAdmin;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -490,7 +693,8 @@ class _BubbleRow extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 4, bottom: 4),
               child: Text(msg.senderName,
-                  style: const TextStyle(fontSize: 11, color: AppColors.textLight, fontWeight: FontWeight.w600)),
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textLight, fontWeight: FontWeight.w600)),
             ),
           Row(
             mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
@@ -502,7 +706,8 @@ class _BubbleRow extends StatelessWidget {
                   backgroundColor: AppColors.primary.withValues(alpha: 0.1),
                   child: Text(
                     msg.senderName.isNotEmpty ? msg.senderName[0] : '?',
-                    style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
                   ),
                 ),
               if (!isMe) const SizedBox(width: 6),
@@ -519,7 +724,10 @@ class _BubbleRow extends StatelessWidget {
                       bottomRight: Radius.circular(isMe ? 2 : 14),
                     ),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2)),
+                      BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2)),
                     ],
                   ),
                   child: Text(
@@ -554,6 +762,8 @@ class _BubbleRow extends StatelessWidget {
   }
 }
 
+// ── Boş panel ─────────────────────────────────────────────────────────────────
+
 class _EmptyChat extends StatelessWidget {
   const _EmptyChat();
 
@@ -568,23 +778,6 @@ class _EmptyChat extends StatelessWidget {
           Text('Konuşma seçin', style: TextStyle(fontSize: 15, color: AppColors.textLight)),
         ],
       ),
-    );
-  }
-}
-
-class _CountBadge extends StatelessWidget {
-  final int count;
-  const _CountBadge({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(
-        color: AppColors.accent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
     );
   }
 }

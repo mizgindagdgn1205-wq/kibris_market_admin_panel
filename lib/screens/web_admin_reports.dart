@@ -16,10 +16,18 @@ class WebAdminReports extends StatelessWidget {
     final users = userProv.users;
 
     final totalListings = all.length;
-    final activeListings = all.where((l) => l.status == ListingStatus.active).length;
-    final pendingListings = all.where((l) => l.status == ListingStatus.pending).length;
-    final soldListings = all.where((l) => l.status == ListingStatus.sold).length;
-    final rejectedListings = all.where((l) => l.status == ListingStatus.expired).length;
+    final activeListings = all
+        .where((l) => l.status == ListingStatus.active)
+        .length;
+    final pendingListings = all
+        .where((l) => l.status == ListingStatus.pending)
+        .length;
+    final soldListings = all
+        .where((l) => l.status == ListingStatus.sold)
+        .length;
+    final rejectedListings = all
+        .where((l) => l.status == ListingStatus.expired)
+        .length;
     final featuredListings = all.where((l) => l.isFeatured).length;
     final totalUsers = users.length;
     final adminUsers = users.where((u) => u.isAdmin).length;
@@ -44,14 +52,19 @@ class WebAdminReports extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Genel Rapor',
-              style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary)),
+          const Text(
+            'Genel Rapor',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 6),
-          const Text('Firebase\'den alınan gerçek zamanlı veriler',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          const Text(
+            'Firebase\'den alınan gerçek zamanlı veriler',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
           const SizedBox(height: 24),
 
           // İlan istatistikleri
@@ -65,15 +78,22 @@ class WebAdminReports extends StatelessWidget {
                   color: AppColors.primary,
                   rows: [
                     _Row('Toplam İlan', '$totalListings'),
-                    _Row('Yayında (Aktif)', '$activeListings',
-                        color: AppColors.success),
-                    _Row('Onay Bekleyen', '$pendingListings',
-                        color: Colors.orange),
-                    _Row('Satıldı', '$soldListings', color: Colors.blue),
-                    _Row('Reddedildi / Süresi Doldu', '$rejectedListings',
-                        color: Colors.red),
-                    _Row('Öne Çıkan', '$featuredListings',
-                        color: Colors.amber),
+                    _Row(
+                      'Yayında (Aktif)',
+                      '$activeListings',
+                      color: AppColors.success,
+                    ),
+                    _Row(
+                      'Onay Bekleyen',
+                      '$pendingListings',
+                      color: Colors.orange,
+                    ),
+                    _Row(
+                      'Reddedildi / Süresi Doldu',
+                      '$rejectedListings',
+                      color: Colors.red,
+                    ),
+                    _Row('Öne Çıkan', '$featuredListings', color: Colors.amber),
                   ],
                 ),
               ),
@@ -87,8 +107,11 @@ class WebAdminReports extends StatelessWidget {
                     _Row('Toplam Kullanıcı', '$totalUsers'),
                     _Row('Admin', '$adminUsers', color: Colors.purple),
                     _Row('Yasaklı', '$bannedUsers', color: Colors.red),
-                    _Row('Normal Üye', '${totalUsers - adminUsers - bannedUsers}',
-                        color: AppColors.success),
+                    _Row(
+                      'Normal Üye',
+                      '${totalUsers - adminUsers - bannedUsers}',
+                      color: AppColors.success,
+                    ),
                   ],
                 ),
               ),
@@ -106,7 +129,9 @@ class WebAdminReports extends StatelessWidget {
                   icon: Icons.category,
                   color: AppColors.primary,
                   total: totalListings,
-                  entries: sortedCats.map((e) => _BarEntry(_catLabel(e.key), e.value)).toList(),
+                  entries: sortedCats
+                      .map((e) => _BarEntry(_catLabel(e.key), e.value))
+                      .toList(),
                 ),
               ),
               const SizedBox(width: 16),
@@ -117,7 +142,9 @@ class WebAdminReports extends StatelessWidget {
                   icon: Icons.location_on,
                   color: Colors.teal,
                   total: totalListings,
-                  entries: sortedLocs.map((e) => _BarEntry(e.key, e.value)).toList(),
+                  entries: sortedLocs
+                      .map((e) => _BarEntry(e.key, e.value))
+                      .toList(),
                 ),
               ),
             ],
@@ -178,9 +205,10 @@ class _ReportCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
@@ -200,11 +228,14 @@ class _ReportCard extends StatelessWidget {
                   child: Icon(icon, color: color, size: 18),
                 ),
                 const SizedBox(width: 10),
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
               ],
             ),
           ),
@@ -212,34 +243,44 @@ class _ReportCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
-              children: rows.map((r) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      children: [
-                        if (r.color != null)
-                          Container(
-                            width: 8,
-                            height: 8,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              color: r.color,
-                              shape: BoxShape.circle,
+              children: rows
+                  .map(
+                    (r) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          if (r.color != null)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: r.color,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          Expanded(
+                            child: Text(
+                              r.label,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ),
-                        Expanded(
-                          child: Text(r.label,
-                              style: const TextStyle(
-                                  fontSize: 13,
-                                  color: AppColors.textSecondary)),
-                        ),
-                        Text(r.value,
+                          Text(
+                            r.value,
                             style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: r.color ?? AppColors.textPrimary)),
-                      ],
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: r.color ?? AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  )).toList(),
+                  )
+                  .toList(),
             ),
           ),
         ],
@@ -278,9 +319,10 @@ class _BarChartCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Column(
@@ -300,11 +342,14 @@ class _BarChartCard extends StatelessWidget {
                   child: Icon(icon, color: color, size: 18),
                 ),
                 const SizedBox(width: 10),
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
               ],
             ),
           ),
@@ -313,8 +358,11 @@ class _BarChartCard extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: total == 0
                 ? const Center(
-                    child: Text('Veri yok',
-                        style: TextStyle(color: AppColors.textLight)))
+                    child: Text(
+                      'Veri yok',
+                      style: TextStyle(color: AppColors.textLight),
+                    ),
+                  )
                 : Column(
                     children: top.map((e) {
                       final pct = e.value / total;
@@ -326,16 +374,22 @@ class _BarChartCard extends StatelessWidget {
                             Row(
                               children: [
                                 Expanded(
-                                  child: Text(e.label.isEmpty ? '(boş)' : e.label,
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.textSecondary)),
-                                ),
-                                Text('${e.value}',
+                                  child: Text(
+                                    e.label.isEmpty ? '(boş)' : e.label,
                                     style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary)),
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${e.value}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 4),
@@ -345,8 +399,9 @@ class _BarChartCard extends StatelessWidget {
                                 value: pct,
                                 minHeight: 6,
                                 backgroundColor: AppColors.divider,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(color),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  color,
+                                ),
                               ),
                             ),
                           ],
@@ -384,28 +439,30 @@ class _StatusPieCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('İlan Durum Dağılımı',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary)),
+          const Text(
+            'İlan Durum Dağılımı',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 16),
           Row(
             children: [
               _statusTile('Yayında', active, total, AppColors.success),
               const SizedBox(width: 12),
               _statusTile('Bekliyor', pending, total, Colors.orange),
-              const SizedBox(width: 12),
-              _statusTile('Satıldı', sold, total, Colors.blue),
               const SizedBox(width: 12),
               _statusTile('Reddedildi', rejected, total, Colors.red),
             ],
@@ -427,15 +484,22 @@ class _StatusPieCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Text('$count',
-                style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: color)),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary)),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(3),
@@ -447,11 +511,14 @@ class _StatusPieCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 4),
-            Text('${(pct * 100).toStringAsFixed(1)}%',
-                style: TextStyle(
-                    fontSize: 11,
-                    color: color,
-                    fontWeight: FontWeight.w600)),
+            Text(
+              '${(pct * 100).toStringAsFixed(1)}%',
+              style: TextStyle(
+                fontSize: 11,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       ),
